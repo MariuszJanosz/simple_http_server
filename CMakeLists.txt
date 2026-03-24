@@ -7,7 +7,7 @@ set(CMAKE_LINK_WARNING_AS_ERROR ON)
 
 add_executable(simple_http_server)
 
-target_sources(simple_http_server PRIVATE simple_http_server.c)
+target_sources(simple_http_server PRIVATE 	simple_http_server.c log.h)
 
 install(TARGETS simple_http_server RUNTIME)
 
