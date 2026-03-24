@@ -19,38 +19,11 @@ int main() {
     src.stream = stream;
     thrd_t thr;
     thrd_create(&thr, stream_reader_thr, &src);
-    while (1) { 
-        if (mtx_lock(&line_queue.mtx) == thrd_error) {
-            LOG(ERROR, "mtx_lock failed!");
-            exit(1);
-        }
-        while (!line_queue.reached_eof && !line_queue.is_nonempty) {
-            cnd_wait(&line_queue.cnd_is_nonempty_or_eof, &line_queue.mtx);
-        }
-        if (line_queue.reached_eof) {
-            while (line_queue.is_nonempty) {
-                printf("%s\n", line_queue.queue[line_queue.front]);
-                if (line_queue.front == line_queue.rear) {
-                    line_queue.front = line_queue.rear = -1;
-                    line_queue.is_nonempty = 0;
-                }
-                else {
-                    line_queue.front += 1;
-                }
-            }
-            break;
-        }
-        printf("%s\n", line_queue.queue[line_queue.front]);
-        if (line_queue.front == line_queue.rear) {
-            line_queue.front = line_queue.rear = -1;
-            line_queue.is_nonempty = 0;
-        }
-        else {
-            line_queue.front += 1;
-        }
-        line_queue.is_nonfull = 1;
-        cnd_signal(&line_queue.cnd_is_nonfull);
-        mtx_unlock(&line_queue.mtx);
+
+    while (!is_reading_finished(&line_queue)) {
+        char* line = get_line(&line_queue);
+        printf("%s\n", line);
+        free(line);
     }
 
     thrd_join(thr, NULL);

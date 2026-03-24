@@ -27,6 +27,8 @@ typedef struct Stream_reader_context_t {
 void init_line_queue(Line_queue_t* lq);
 void free_line_queue(Line_queue_t* lq);
 int stream_reader_thr(void* reader_context);
+char* get_line(Line_queue_t* lq);
+int is_reading_finished(Line_queue_t* lq);
 
 #endif //STREAM_READER_H
 

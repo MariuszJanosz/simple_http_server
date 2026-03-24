@@ -131,3 +131,36 @@ int stream_reader_thr(void* stream_reader_context) {
     thrd_exit(0);
 }
 
+char* get_line(Line_queue_t* lq) {
+    if (mtx_lock(&lq->mtx) == thrd_error) {
+        LOG(ERROR, "mtx_lock failed!");
+        exit(1);
+    }
+    while (!lq->is_nonempty) {
+        cnd_wait(&lq->cnd_is_nonempty_or_eof, &lq->mtx);
+    }
+    char* res = lq->queue[lq->front];
+    if (lq->front == lq->rear) {
+        lq->front = lq->rear = -1;
+        lq->is_nonempty = 0;
+    }
+    else {
+        lq->front += 1;
+        lq->front %= LINE_QUEUE_CAPACITY;
+    }
+    lq->is_nonfull = 1;
+    cnd_signal(&lq->cnd_is_nonfull);
+    mtx_unlock(&lq->mtx);
+    return res;
+}
+
+int is_reading_finished(Line_queue_t* lq) {
+    if (mtx_lock(&lq->mtx) == thrd_error) {
+        LOG(ERROR, "mtx_lock failed!");
+        exit(1);
+    }
+    int res = lq->reached_eof && !lq->is_nonempty;
+    mtx_unlock(&lq->mtx);
+    return res;
+}
+
