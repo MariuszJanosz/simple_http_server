@@ -5,9 +5,14 @@
 
 #include "log.h"
 #include "stream_reader.h"
+#include "tcp_listener.h"
+
+#define IP (127 * (1 << 24) + 1) //127.0.0.1 localhost
+#define PORT 54321
 
 int main() {
-    FILE* stream = fopen("simple_http_server.c", "rb");
+    int tcp_listener_fd = create_tcp_listener(IP, PORT);
+    FILE* stream = accept_tcp_connection(tcp_listener_fd);
     if (!stream) {
         LOG(ERROR, "fopen failed!");
         exit(1);
@@ -29,6 +34,8 @@ int main() {
     thrd_join(thr, NULL);
     fclose(stream);
     free_line_queue(&line_queue);
+    close_tcp_listener(tcp_listener_fd);
+    fflush(stdout);
     return 0;
 }
 
