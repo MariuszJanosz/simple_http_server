@@ -3,6 +3,9 @@
 #include <threads.h>
 #include <assert.h>
 #include <string.h>
+#include <errno.h>
+
+#include <unistd.h>
 
 #include "stream_reader.h"
 #include "log.h"
@@ -34,28 +37,32 @@ void free_line_queue(Line_queue_t* lq) {
     cnd_destroy(&lq->cnd_is_nonempty_or_eof);
 }
 
-char* read_line(FILE* stream) {
-    static thread_local char leftover[8];
+char* read_line(int fd) {
+#define LEFTOVER_CAPACITY 8
+    static thread_local char leftover[LEFTOVER_CAPACITY];
     static thread_local int leftover_len = 0;
+    static thread_local int reached_eof = 0;
     int res_size = 64;
     char* res = (char*)malloc(res_size * sizeof(*res));
     int res_len = 0;
     res[res_len] = '\0';
-    while (1) {
-        if (leftover_len == 0) { //If leftover is empty read another 8 bytes from the stream
-            leftover_len = fread(leftover, 1, 8, stream);
-            if (leftover_len < 8) { //error or eof
-                if (!feof(stream)) {
-                    LOG(ERROR, "fread failed!");
-                    exit(1);
-                }
+    while (!reached_eof || leftover_len != 0) {
+        //If leftover is empty read another LEFTOVER_CAPACITY bytes from the stream
+        if (leftover_len == 0) {
+            leftover_len = read(fd, leftover, LEFTOVER_CAPACITY);
+            if (leftover_len == 0) {//eof reached
+                reached_eof = 1;
+            }
+            else if (leftover_len == -1) {//error
+                LOG(ERROR, "read failed!");
+                exit(1);
             }
         }
         
         //find next \n in leftover
         for (int i = 0; i < leftover_len; ++i) {
             if (leftover[i] == '\n') {
-                while (i + res_len + 1 > res_size) { //res would overflow, double it
+                while (res_len + (i + 1) + 1 > res_size) { //res would overflow, double it
                     res_size *= 2;
                     char* tmp = (char*)realloc(res, res_size * sizeof(*res));
                     if (!tmp) {
@@ -64,8 +71,8 @@ char* read_line(FILE* stream) {
                     }
                     res = tmp;
                 }
-                memcpy(res + res_len, leftover, i);
-                res_len += i;
+                memcpy(res + res_len, leftover, i + 1);
+                res_len += i + 1;
                 res[res_len] = '\0';
                 //shift leftover
                 memmove(leftover, leftover + i + 1, leftover_len - i - 1);
@@ -74,8 +81,8 @@ char* read_line(FILE* stream) {
             }
         }
 
-        if (leftover_len > 0) { //if we are here there is no \n in leftover
-            while (leftover_len + res_len + 1 > res_size) { //res would overflow, double it
+        if (leftover_len > 0) {//if we are here there is no \n in leftover
+            while (res_len + leftover_len + 1 > res_size) {//res would overflow, double it
                 res_size *= 2;
                 char* tmp = (char*)realloc(res, res_size * sizeof(*res));
                 if (!tmp) {
@@ -89,25 +96,31 @@ char* read_line(FILE* stream) {
             res[res_len] = '\0';
             leftover_len = 0;
         }
-
-        if (feof(stream)) {
-            return res;
-        }
     }
-    assert(0 && "FILE: " __FILE__ " LINE: " stringify(__LINE__) " We should never get here!");
     return res;
 }
 
 int stream_reader_thr(void* stream_reader_context) {
     Line_queue_t* line_queue = ((Stream_reader_context_t*)stream_reader_context)->line_queue;
     FILE* stream = ((Stream_reader_context_t*)stream_reader_context)->stream;
+    int fd = fileno(stream);
+    if (fd == -1) {
+        LOG(ERROR, "fileno failed!");
+        exit(1);
+    }
 
-    while (!feof(stream)) {
-        char* line = read_line(stream);
-        
+    while (!line_queue->reached_eof) {
+        char* line = read_line(fd);
         if (mtx_lock(&line_queue->mtx) == thrd_error) {
             LOG(ERROR, "mtx_lock failed!");
             exit(1);
+        }
+        if (line[0] == '\0') {
+            line_queue->reached_eof = 1;
+            free(line);
+            cnd_signal(&line_queue->cnd_is_nonempty_or_eof);
+            mtx_unlock(&line_queue->mtx);
+            continue;
         }
         while (!line_queue->is_nonfull) {
             cnd_wait(&line_queue->cnd_is_nonfull, &line_queue->mtx);
@@ -122,9 +135,6 @@ int stream_reader_thr(void* stream_reader_context) {
         if ((line_queue->rear + 1) % LINE_QUEUE_CAPACITY == line_queue->front) {
             line_queue->is_nonfull = 0;
         }
-        if (feof(stream)) {
-            line_queue->reached_eof = 1;
-        }
         cnd_signal(&line_queue->cnd_is_nonempty_or_eof);
         mtx_unlock(&line_queue->mtx);
     }
@@ -137,6 +147,9 @@ char* get_line(Line_queue_t* lq) {
         exit(1);
     }
     while (!lq->is_nonempty) {
+        if (lq->reached_eof) {
+            return NULL;
+        }
         cnd_wait(&lq->cnd_is_nonempty_or_eof, &lq->mtx);
     }
     char* res = lq->queue[lq->front];
