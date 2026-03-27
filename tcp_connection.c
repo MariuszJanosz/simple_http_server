@@ -7,7 +7,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 
-#include "tcp_listener.h"
+#include "tcp_connection.h"
 #include "log.h"
 
 #define CONN_BACKLOG 8
@@ -41,18 +41,35 @@ void close_tcp_listener(int tcp_listener_fd) {
     close(tcp_listener_fd);
 }
 
-FILE* accept_tcp_connection(int tcp_listener_fd) {
+Tcp_connection_t accept_tcp_connection(int tcp_listener_fd) {
     int conn_sock_fd = accept(tcp_listener_fd, NULL, NULL);
     if (conn_sock_fd == -1) {
         LOG(ERROR, "accept failed!");
         exit(1);
     }
-    FILE* conn_stream = fdopen(conn_sock_fd, "r");
-    if (!conn_stream) {
+    FILE* in_stream = fdopen(conn_sock_fd, "r");
+    if (!in_stream) {
         LOG(ERROR, "fdopen failed!");
-        close(conn_sock_fd);
         exit(1); 
     }
-    return conn_stream;
+    int conn_sock_fd_dup = dup(conn_sock_fd);
+    if (conn_sock_fd_dup == -1) {
+        LOG(ERROR, "dup failed!");
+        exit(1);
+    }
+    FILE* out_stream = fdopen(conn_sock_fd_dup, "w");
+    if (!out_stream) {
+        LOG(ERROR, "fdopen failed!");
+        exit(1); 
+    }
+    Tcp_connection_t res;
+    res.in_stream = in_stream;
+    res.out_stream = out_stream;
+    return res;
+}
+
+void close_tcp_connection(Tcp_connection_t* tcp_connection) {
+   fclose(tcp_connection->in_stream); 
+   fclose(tcp_connection->out_stream); 
 }
 

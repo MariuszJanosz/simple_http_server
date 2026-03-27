@@ -10,7 +10,7 @@ add_executable(simple_http_server)
 target_sources(simple_http_server PRIVATE	simple_http_server.c
 									log.h
 						stream_reader.c 	stream_reader.h
-						tcp_listener.c		tcp_listener.h)
+						tcp_connection.c	tcp_connection.h)
 
 install(TARGETS simple_http_server RUNTIME)
 
