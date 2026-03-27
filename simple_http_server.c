@@ -18,17 +18,11 @@ int main() {
     Tcp_connection_t tcp_connection = accept_tcp_connection(tcp_listener_fd);
     
     //Create in_stream reader
-    Line_queue_t line_queue;
-    init_line_queue(&line_queue);
-    Stream_reader_context_t src;
-    src.line_queue = &line_queue;
-    src.stream = tcp_connection.in_stream;
-    thrd_t thr;
-    thrd_create(&thr, stream_reader_thr, &src);
+    Line_queue_t* line_queue = init_stream_reader(tcp_connection.in_stream);
 
     //Read incoming data line by line
-    while (!is_reading_finished(&line_queue)) {
-        char* line = get_line(&line_queue);
+    while (!is_reading_finished(line_queue)) {
+        char* line = get_line(line_queue);
         if (!line) {
             break;
         }
@@ -38,10 +32,8 @@ int main() {
         fflush(tcp_connection.out_stream);
     }
 
-    thrd_join(thr, NULL);
-
     close_tcp_connection(&tcp_connection);
-    free_line_queue(&line_queue);
+    free_line_queue(line_queue);
     fflush(stdout);
     return 0;
 }

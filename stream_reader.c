@@ -32,9 +32,22 @@ void init_line_queue(Line_queue_t* lq) {
 }
 
 void free_line_queue(Line_queue_t* lq) {
+    while (lq->is_nonempty) {
+        char* line = lq->queue[lq->front];
+        if (lq->front == lq->rear) {
+            lq->front = lq->rear = -1;
+            lq->is_nonempty = 0;
+        }
+        else {
+            lq->front += 1;
+            lq->front %= LINE_QUEUE_CAPACITY;
+        }
+        free(line);
+    }
     mtx_destroy(&lq->mtx);
     cnd_destroy(&lq->cnd_is_nonfull);
     cnd_destroy(&lq->cnd_is_nonempty_or_eof);
+    free(lq);
 }
 
 char* read_line(int fd) {
@@ -138,6 +151,7 @@ int stream_reader_thr(void* stream_reader_context) {
         cnd_signal(&line_queue->cnd_is_nonempty_or_eof);
         mtx_unlock(&line_queue->mtx);
     }
+    free(stream_reader_context);
     thrd_exit(0);
 }
 
@@ -174,6 +188,26 @@ int is_reading_finished(Line_queue_t* lq) {
     }
     int res = lq->reached_eof && !lq->is_nonempty;
     mtx_unlock(&lq->mtx);
+    return res;
+}
+
+Line_queue_t* init_stream_reader(FILE* stream) {
+    Line_queue_t* res = malloc(sizeof(*res));
+    if (!res) {
+        LOG(ERROR, "malloc failed!");
+        exit(1);
+    }
+    init_line_queue(res);
+    Stream_reader_context_t* src = malloc(sizeof(*src));
+    if (!src) {
+        LOG(ERROR, "malloc failed!");
+        exit(1);
+    }
+    src->line_queue = res;
+    src->stream = stream;
+    thrd_t thr;
+    thrd_create(&thr, stream_reader_thr, src);
+    thrd_detach(thr);
     return res;
 }
 

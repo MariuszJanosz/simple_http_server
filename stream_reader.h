@@ -29,6 +29,7 @@ void free_line_queue(Line_queue_t* lq);
 int stream_reader_thr(void* reader_context);
 char* get_line(Line_queue_t* lq);
 int is_reading_finished(Line_queue_t* lq);
+Line_queue_t* init_stream_reader(FILE* stream); 
 
 #endif //STREAM_READER_H
 
