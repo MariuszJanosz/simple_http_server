@@ -1,48 +1,66 @@
 #include "unity.h"
 #include "stream_reader.h"
 
-void setUp() {
+#include <stdlib.h>
+#include <stdio.h>
 
+#include <unistd.h>
+
+Line_queue_t* lq = NULL;
+
+void setUp() {
+    lq = malloc(sizeof(*lq));
+    if (!lq) {
+        fprintf(stderr, "malloc failed!");
+        exit(1);
+    }
+    init_line_queue(lq);
 }
 
 void tearDown() {
-
+    free_line_queue(lq);
+    lq = NULL;
 }
 
 void test_init_line_queue() {
-    Line_queue_t lq;
-    init_line_queue(&lq);
-    TEST_ASSERT_EQUAL_INT_MESSAGE(-1, lq.front, "Incorrect front!");
+    TEST_ASSERT_EQUAL_INT_MESSAGE(-1, lq->front, "Incorrect front!");
+    TEST_ASSERT_EQUAL_INT_MESSAGE(-1, lq->rear, "Incorrect rear!");
+    TEST_ASSERT_EQUAL_INT_MESSAGE( 0, lq->reached_eof, "Incorrect reached_eof!");
+    TEST_ASSERT_EQUAL_INT_MESSAGE( 0, lq->is_nonempty, "Incorrect is_nonempty!");
+    TEST_ASSERT_EQUAL_INT_MESSAGE( 1, lq->is_nonfull, "Incorrect is_nonfull!");
 }
 
-void test_free_line_queue() {
-
-}
-
-void stream_reader_thr() {
-
-}
-
-void test_get_line() {
-
-}
-
-void test_is_reading_finished() {
-
-}
-
-void init_stream_reader() {
-
+char* read_line(int fd);
+void test_read_line() {
+    int pipefd[2];
+    if (pipe(pipefd) == -1) {
+        fprintf(stderr, "pipe failed!");
+        exit(1);
+    }
+    char buff[] =   "Line 1\n"
+                    "Line 2\n"
+                    "Line 3\n";
+    write(pipefd[1], buff, sizeof(buff)/sizeof(buff[0]));
+    close(pipefd[1]);
+    char* line = read_line(pipefd[0]);
+    TEST_ASSERT_EQUAL_STRING("Line 1\n", line);
+    free(line);
+    line = read_line(pipefd[0]);
+    TEST_ASSERT_EQUAL_STRING("Line 2\n", line);
+    free(line);
+    line = read_line(pipefd[0]);
+    TEST_ASSERT_EQUAL_STRING("Line 3\n", line);
+    free(line);
+    line = read_line(pipefd[0]);
+    TEST_ASSERT_EQUAL_STRING("", line);
+    free(line);
+    close(pipefd[0]);
 }
 
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_init_line_queue);
-    RUN_TEST(test_free_line_queue);
-    RUN_TEST(test_stream_reader_thr);
-    RUN_TEST(test_get_line);
-    RUN_TEST(test_is_reading_finished);
-    RUN_TEST(test_init_stream_reader);
+    RUN_TEST(test_read_line);
     return UNITY_END();
 }
 
