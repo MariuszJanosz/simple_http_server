@@ -10,111 +10,101 @@
 #include "stream_reader.h"
 #include "log.h"
 
-void init_line_queue(Line_queue_t* lq) {
-    lq->front = -1;
-    lq->rear = -1;
-    lq->reached_eof = 0;
-    lq->is_nonempty = 0;
-    lq->is_nonfull = 1;
+void init_input_queue(Input_queue_t* iq) {
+    iq->front = -1;
+    iq->rear = -1;
+    iq->reached_eof = 0;
+    iq->is_nonempty = 0;
+    iq->is_nonfull = 1;
 
-    if (mtx_init(&lq->mtx, mtx_plain) == thrd_error) {
+    if (mtx_init(&iq->mtx, mtx_plain) == thrd_error) {
         LOG(ERROR, "mtx_init failed!");
         exit(1);
     }
-    if (cnd_init(&lq->cnd_is_nonfull) != thrd_success) {
+    if (cnd_init(&iq->cnd_is_nonfull) != thrd_success) {
         LOG(ERROR, "cnd_init failed!");
         exit(1);
     }
-    if (cnd_init(&lq->cnd_is_nonempty_or_eof) != thrd_success) {
+    if (cnd_init(&iq->cnd_is_nonempty_or_eof) != thrd_success) {
         LOG(ERROR, "cnd_init failed!");
         exit(1);
     }
 }
 
-void free_line_queue(Line_queue_t* lq) {
-    while (lq->is_nonempty) {
-        char* line = lq->queue[lq->front];
-        if (lq->front == lq->rear) {
-            lq->front = lq->rear = -1;
-            lq->is_nonempty = 0;
-        }
-        else {
-            lq->front += 1;
-            lq->front %= LINE_QUEUE_CAPACITY;
-        }
-        free(line);
-    }
-    mtx_destroy(&lq->mtx);
-    cnd_destroy(&lq->cnd_is_nonfull);
-    cnd_destroy(&lq->cnd_is_nonempty_or_eof);
-    free(lq);
+void free_input_queue(Input_queue_t* iq) {
+    mtx_destroy(&iq->mtx);
+    cnd_destroy(&iq->cnd_is_nonfull);
+    cnd_destroy(&iq->cnd_is_nonempty_or_eof);
+    free(iq);
 }
 
-char* read_line(int fd) {
-#define LEFTOVER_CAPACITY 8
-    static thread_local char leftover[LEFTOVER_CAPACITY];
-    static thread_local int leftover_len = 0;
-    static thread_local int reached_eof = 0;
-    int res_size = 64;
-    char* res = (char*)malloc(res_size * sizeof(*res));
-    int res_len = 0;
-    res[res_len] = '\0';
-    while (!reached_eof || leftover_len != 0) {
-        //If leftover is empty read another LEFTOVER_CAPACITY bytes from the stream
-        if (leftover_len == 0) {
-            leftover_len = read(fd, leftover, LEFTOVER_CAPACITY);
-            if (leftover_len == 0) {//eof reached
-                reached_eof = 1;
-            }
-            else if (leftover_len == -1) {//error
-                LOG(ERROR, "read failed!");
-                exit(1);
-            }
-        }
-        
-        //find next \n in leftover
-        for (int i = 0; i < leftover_len; ++i) {
-            if (leftover[i] == '\n') {
-                while (res_len + (i + 1) + 1 > res_size) { //res would overflow, double it
-                    res_size *= 2;
-                    char* tmp = (char*)realloc(res, res_size * sizeof(*res));
-                    if (!tmp) {
-                        LOG(ERROR, "realloc failed!");
-                        exit(1);
-                    }
-                    res = tmp;
-                }
-                memcpy(res + res_len, leftover, i + 1);
-                res_len += i + 1;
-                res[res_len] = '\0';
-                //shift leftover
-                memmove(leftover, leftover + i + 1, leftover_len - i - 1);
-                leftover_len -= i + 1;
-                return res;
-            }
-        }
+int transfer(char* b, int cnt, Input_queue_t* i) {
+    if (mtx_lock(&i->mtx) == thrd_error) {
+        LOG(ERROR, "mtx_lock failed!");
+        exit(1);
+    }
+    while (!i->is_nonfull) {
+        cnd_wait(&i->cnd_is_nonfull, &i->mtx);
+    }
+    int free_space;
+    if (i->front != - 1) {
+        free_space = INPUT_QUEUE_CAPACITY -
+        (INPUT_QUEUE_CAPACITY + i->rear - i->front + 1) % INPUT_QUEUE_CAPACITY;
+    }
+    else {
+        free_space = INPUT_QUEUE_CAPACITY;
+    }
+    if (free_space < cnt) {
+        cnt = free_space;
+    }
+    if (i->rear + cnt < INPUT_QUEUE_CAPACITY) {
+        memcpy(i->queue + i->rear + 1, b, cnt);
+    }
+    else {
+        int cnt1 = (i->rear + 1 + cnt) % INPUT_QUEUE_CAPACITY;
+        memcpy(i->queue + i->rear + 1, b, cnt - cnt1);
+        memcpy(i->queue, b + (cnt - cnt1), cnt1);
+    }
+    i->rear += cnt;
+    i->rear %= INPUT_QUEUE_CAPACITY;
+    if (i->front == -1) {
+        i->front = 0;
+    }
+    if ((i->rear + 1) % INPUT_QUEUE_CAPACITY == i->front) {
+        i->is_nonfull = 0;
+    }
+    i->is_nonempty = 1;
+    cnd_signal(&i->cnd_is_nonempty_or_eof);
+    mtx_unlock(&i->mtx);
+    return cnt;
+}
 
-        if (leftover_len > 0) {//if we are here there is no \n in leftover
-            while (res_len + leftover_len + 1 > res_size) {//res would overflow, double it
-                res_size *= 2;
-                char* tmp = (char*)realloc(res, res_size * sizeof(*res));
-                if (!tmp) {
-                    LOG(ERROR, "realloc failed!");
-                    exit(1);
-                }
-                res = tmp;
-            }
-            memcpy(res + res_len, leftover, leftover_len);
-            res_len += leftover_len;
-            res[res_len] = '\0';
-            leftover_len = 0;
+void read_chunk(int fd, Input_queue_t* iq) {
+#define CHUNK_SIZE 4 * 1024
+    char buff[CHUNK_SIZE];
+    int cnt = read(fd, buff, CHUNK_SIZE);
+    if (cnt == -1) {
+        LOG(ERROR, "read failed!");
+        exit(1);
+    }
+    else if (cnt == 0) {
+        mtx_lock(&iq->mtx);
+        iq->reached_eof = 1;
+        cnd_signal(&iq->cnd_is_nonempty_or_eof);
+        mtx_unlock(&iq->mtx);
+    }
+    else {
+        char* ptr = buff;
+        while (cnt) {
+            int tmp = transfer(ptr, cnt, iq);
+            cnt -= tmp;
+            ptr += tmp;
         }
     }
-    return res;
 }
 
 int stream_reader_thr(void* stream_reader_context) {
-    Line_queue_t* line_queue = ((Stream_reader_context_t*)stream_reader_context)->line_queue;
+    Input_queue_t* input_queue = ((Stream_reader_context_t*)stream_reader_context)->input_queue;
     FILE* stream = ((Stream_reader_context_t*)stream_reader_context)->stream;
     int fd = fileno(stream);
     if (fd == -1) {
@@ -122,88 +112,83 @@ int stream_reader_thr(void* stream_reader_context) {
         exit(1);
     }
 
-    while (!line_queue->reached_eof) {
-        char* line = read_line(fd);
-        if (mtx_lock(&line_queue->mtx) == thrd_error) {
-            LOG(ERROR, "mtx_lock failed!");
-            exit(1);
-        }
-        if (line[0] == '\0') {
-            line_queue->reached_eof = 1;
-            free(line);
-            cnd_signal(&line_queue->cnd_is_nonempty_or_eof);
-            mtx_unlock(&line_queue->mtx);
-            continue;
-        }
-        while (!line_queue->is_nonfull) {
-            cnd_wait(&line_queue->cnd_is_nonfull, &line_queue->mtx);
-        }
-        if (line_queue->front == -1) {
-            line_queue->front = 0;
-        }
-        line_queue->rear += 1;
-        line_queue->rear %= LINE_QUEUE_CAPACITY;
-        line_queue->queue[line_queue->rear] = line;
-        line_queue->is_nonempty = 1;
-        if ((line_queue->rear + 1) % LINE_QUEUE_CAPACITY == line_queue->front) {
-            line_queue->is_nonfull = 0;
-        }
-        cnd_signal(&line_queue->cnd_is_nonempty_or_eof);
-        mtx_unlock(&line_queue->mtx);
+    while (!input_queue->reached_eof) {
+        read_chunk(fd, input_queue);
     }
+    
     free(stream_reader_context);
     thrd_exit(0);
 }
 
-char* get_line(Line_queue_t* lq) {
-    if (mtx_lock(&lq->mtx) == thrd_error) {
+int get_data(Input_queue_t* iq, char* output, int count) {
+    if (mtx_lock(&iq->mtx) == thrd_error) {
         LOG(ERROR, "mtx_lock failed!");
         exit(1);
     }
-    while (!lq->is_nonempty) {
-        if (lq->reached_eof) {
-            return NULL;
+    while (!iq->is_nonempty) {
+        if (iq->reached_eof) {
+            return 0;
         }
-        cnd_wait(&lq->cnd_is_nonempty_or_eof, &lq->mtx);
+        cnd_wait(&iq->cnd_is_nonempty_or_eof, &iq->mtx);
     }
-    char* res = lq->queue[lq->front];
-    if (lq->front == lq->rear) {
-        lq->front = lq->rear = -1;
-        lq->is_nonempty = 0;
+    int available_data = (INPUT_QUEUE_CAPACITY + iq->rear - iq->front + 1) %
+        INPUT_QUEUE_CAPACITY;
+    if (available_data == 0) {
+        available_data = INPUT_QUEUE_CAPACITY;
+    }
+    if (available_data < count) {
+        count = available_data;
+    }
+    if (count <= INPUT_QUEUE_CAPACITY - iq->front) {
+        memcpy(output, &iq->queue[iq->front],
+                count * sizeof(*output));
     }
     else {
-        lq->front += 1;
-        lq->front %= LINE_QUEUE_CAPACITY;
+        memcpy(output, &iq->queue[iq->front],
+        (INPUT_QUEUE_CAPACITY - iq->front) *
+        sizeof(*output));
+        memcpy(output +
+        (INPUT_QUEUE_CAPACITY - iq->front),
+        &iq->queue[0],
+        (count -
+        (INPUT_QUEUE_CAPACITY - iq->front)) *
+        sizeof(*output));
     }
-    lq->is_nonfull = 1;
-    cnd_signal(&lq->cnd_is_nonfull);
-    mtx_unlock(&lq->mtx);
-    return res;
+    iq->front += count;
+    iq->front %= INPUT_QUEUE_CAPACITY;
+    if (count == available_data) {
+        iq->front = iq->rear = -1;
+        iq->is_nonempty = 0;
+    }
+    iq->is_nonfull = 1;
+    cnd_signal(&iq->cnd_is_nonfull);
+    mtx_unlock(&iq->mtx);
+    return count;
 }
 
-int is_reading_finished(Line_queue_t* lq) {
-    if (mtx_lock(&lq->mtx) == thrd_error) {
+int is_reading_finished(Input_queue_t* iq) {
+    if (mtx_lock(&iq->mtx) == thrd_error) {
         LOG(ERROR, "mtx_lock failed!");
         exit(1);
     }
-    int res = lq->reached_eof && !lq->is_nonempty;
-    mtx_unlock(&lq->mtx);
+    int res = iq->reached_eof && !iq->is_nonempty;
+    mtx_unlock(&iq->mtx);
     return res;
 }
 
-Line_queue_t* init_stream_reader(FILE* stream) {
-    Line_queue_t* res = malloc(sizeof(*res));
+Input_queue_t* init_stream_reader(FILE* stream) {
+    Input_queue_t* res = malloc(sizeof(*res));
     if (!res) {
         LOG(ERROR, "malloc failed!");
         exit(1);
     }
-    init_line_queue(res);
+    init_input_queue(res);
     Stream_reader_context_t* src = malloc(sizeof(*src));
     if (!src) {
         LOG(ERROR, "malloc failed!");
         exit(1);
     }
-    src->line_queue = res;
+    src->input_queue = res;
     src->stream = stream;
     thrd_t thr;
     thrd_create(&thr, stream_reader_thr, src);

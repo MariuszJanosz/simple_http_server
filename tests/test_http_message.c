@@ -2,6 +2,7 @@
 #include "http_message.h"
 
 #include <string.h>
+#include <stdlib.h>
 
 void setUp() {}
 void tearDown() {}
@@ -36,6 +37,12 @@ void test_parse_request_line() {
     ((Request_line_t*)msg.start_line)->request_target);
     TEST_ASSERT_EQUAL_STRING("HTTP/1.1",
     ((Request_line_t*)msg.start_line)->http_version);
+    free(((Request_line_t*)msg.start_line)->request_target);
+    free(((Request_line_t*)msg.start_line)->http_version);
+    free(msg.start_line);
+    line = strdup("yfhsaod oifesdv");
+    success = parse_request_line(&msg, line);
+    TEST_ASSERT_FALSE(success);
 }
 
 int main() {

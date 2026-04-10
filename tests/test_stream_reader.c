@@ -6,61 +6,33 @@
 
 #include <unistd.h>
 
-Line_queue_t* lq = NULL;
+Input_queue_t* iq = NULL;
 
 void setUp() {
-    lq = malloc(sizeof(*lq));
-    if (!lq) {
+    iq = malloc(sizeof(*iq));
+    if (!iq) {
         fprintf(stderr, "malloc failed!");
         exit(1);
     }
-    init_line_queue(lq);
+    init_input_queue(iq);
 }
 
 void tearDown() {
-    free_line_queue(lq);
-    lq = NULL;
+    free_input_queue(iq);
+    iq = NULL;
 }
 
-void test_init_line_queue() {
-    TEST_ASSERT_EQUAL_INT_MESSAGE(-1, lq->front, "Incorrect front!");
-    TEST_ASSERT_EQUAL_INT_MESSAGE(-1, lq->rear, "Incorrect rear!");
-    TEST_ASSERT_EQUAL_INT_MESSAGE( 0, lq->reached_eof, "Incorrect reached_eof!");
-    TEST_ASSERT_EQUAL_INT_MESSAGE( 0, lq->is_nonempty, "Incorrect is_nonempty!");
-    TEST_ASSERT_EQUAL_INT_MESSAGE( 1, lq->is_nonfull, "Incorrect is_nonfull!");
-}
-
-char* read_line(int fd);
-void test_read_line() {
-    int pipefd[2];
-    if (pipe(pipefd) == -1) {
-        fprintf(stderr, "pipe failed!");
-        exit(1);
-    }
-    char buff[] =   "Line 1\n"
-                    "Line 2\n"
-                    "Line 3\n";
-    write(pipefd[1], buff, sizeof(buff)/sizeof(buff[0]));
-    close(pipefd[1]);
-    char* line = read_line(pipefd[0]);
-    TEST_ASSERT_EQUAL_STRING("Line 1\n", line);
-    free(line);
-    line = read_line(pipefd[0]);
-    TEST_ASSERT_EQUAL_STRING("Line 2\n", line);
-    free(line);
-    line = read_line(pipefd[0]);
-    TEST_ASSERT_EQUAL_STRING("Line 3\n", line);
-    free(line);
-    line = read_line(pipefd[0]);
-    TEST_ASSERT_EQUAL_STRING("", line);
-    free(line);
-    close(pipefd[0]);
+void test_init_input_queue() {
+    TEST_ASSERT_EQUAL_INT_MESSAGE(-1, iq->front, "Incorrect front!");
+    TEST_ASSERT_EQUAL_INT_MESSAGE(-1, iq->rear, "Incorrect rear!");
+    TEST_ASSERT_EQUAL_INT_MESSAGE( 0, iq->reached_eof, "Incorrect reached_eof!");
+    TEST_ASSERT_EQUAL_INT_MESSAGE( 0, iq->is_nonempty, "Incorrect is_nonempty!");
+    TEST_ASSERT_EQUAL_INT_MESSAGE( 1, iq->is_nonfull, "Incorrect is_nonfull!");
 }
 
 int main() {
     UNITY_BEGIN();
-    RUN_TEST(test_init_line_queue);
-    RUN_TEST(test_read_line);
+    RUN_TEST(test_init_input_queue);
     return UNITY_END();
 }
 
