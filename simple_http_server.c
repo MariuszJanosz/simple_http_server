@@ -8,6 +8,7 @@
 #include "log.h"
 #include "stream_reader.h"
 #include "tcp_connection.h"
+#include "http_message.h"
 
 #define IP (((unsigned int)127*(1<<24))+(0*(1<<16))+(0*(1<<8))+1) //127.0.0.1 localhost
 #define PORT 54321
@@ -19,16 +20,23 @@ int main() {
     
     //Create in_stream reader
     Input_queue_t* input_queue = init_stream_reader(tcp_connection.in_stream);
-
-    //Read incoming data
-    while (!is_reading_finished(input_queue)) {
-        char buffer[1024];
-        int read = get_data(input_queue, buffer, 1024);
-        if (read == 0)
-            continue;
-        printf("%.*s", read, buffer);
-        fprintf(tcp_connection.out_stream, "Server echo: %.*s", read, buffer);
-        fflush(tcp_connection.out_stream);
+    
+    Http_message_t req;
+    init_http_message(&req, HTTP_REQUEST);
+    int success = parse_request_line(&req, input_queue);
+    if (success) {
+        Request_line_t* req_line = (Request_line_t*)req.start_line;
+        char* method = NULL;
+        switch (req_line->method) {
+            case HTTP_GET:
+                method = "GET";
+                break;
+            default:
+                method = "ERROR";
+        }
+        printf("Method: %s\n", method);
+        printf("Path: %s\n", req_line->request_target);
+        printf("Version: %s\n", req_line->http_version);
     }
 
     close_tcp_connection(&tcp_connection);

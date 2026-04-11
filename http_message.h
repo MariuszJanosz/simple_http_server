@@ -1,6 +1,8 @@
 #ifndef HTTP_MESSAGE_H
 #define HTTP_MESSAGE_H
 
+#include "stream_reader.h"
+
 typedef enum {
     HTTP_REQUEST,
     HTTP_RESPONSE
@@ -43,7 +45,7 @@ typedef struct Http_message_t {
 } Http_message_t;
 
 void init_http_message(Http_message_t* http_msg, Message_type_t type);
-int parse_request_line(Http_message_t* http_msg, char* input);
+int parse_request_line(Http_message_t* http_msg, Input_queue_t* iq);
 
 #endif //HTTP_MESSAGE_H
 

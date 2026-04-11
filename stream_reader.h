@@ -30,6 +30,7 @@ int stream_reader_thr(void* reader_context);
 int get_data(Input_queue_t* iq, char* output, int count);
 int is_reading_finished(Input_queue_t* iq);
 Input_queue_t* init_stream_reader(FILE* stream); 
+char* input_queue_get_line(Input_queue_t* iq, int* new_line_found);
 
 #endif //STREAM_READER_H
 

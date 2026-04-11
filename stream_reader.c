@@ -196,3 +196,45 @@ Input_queue_t* init_stream_reader(FILE* stream) {
     return res;
 }
 
+char* input_queue_get_line(Input_queue_t* iq, int* new_line_found) {
+    if (mtx_lock(&iq->mtx) == thrd_error) {
+        LOG(ERROR, "mtx_lock failed!");
+        exit(1);
+    }
+    while (!iq->is_nonempty) {
+        if (iq->reached_eof) {
+            LOG(ERROR, "unexpected EOF!");
+            exit(1);
+        }
+        cnd_wait(&iq->cnd_is_nonempty_or_eof, &iq->mtx);
+    }
+    int i = iq->front;
+    while (iq->queue[i] != '\n' && i != iq->rear) {
+        i = (i + 1) % INPUT_QUEUE_CAPACITY;
+    }
+    if (iq->queue[i] == '\n') {
+        *new_line_found = 1;
+    }
+    else {
+        *new_line_found = 0;
+    }
+    int size = (INPUT_QUEUE_CAPACITY + i - iq->front + 1) % INPUT_QUEUE_CAPACITY;
+    if (size == 0) {
+        size == INPUT_QUEUE_CAPACITY;
+    }
+    mtx_unlock(&iq->mtx);
+    char* res = malloc((size + 1) * sizeof(*res));
+    if (!res) {
+        LOG(ERROR, "malloc failed!");
+        exit(1);
+    }
+    res[size] = '\0';
+    char* ptr = res;
+    while(size) {
+        int tmp = get_data(iq, ptr, size);
+        ptr += tmp;
+        size -= tmp;
+    }
+    return res;
+}
+

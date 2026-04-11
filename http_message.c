@@ -1,5 +1,6 @@
 #include "http_message.h"
 #include "log.h"
+#include "stream_reader.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -53,7 +54,21 @@ int is_valid_http_version(char* str) {
     return 0;
 }
 
-int parse_request_line(Http_message_t* http_msg, char* input) {
+int parse_request_line(Http_message_t* http_msg, Input_queue_t* iq) {
+    int new_line_found = 0;
+    char* input = input_queue_get_line(iq, &new_line_found);
+    while (!new_line_found) {
+        char* tmp = input_queue_get_line(iq, &new_line_found);
+        int input_len = strlen(input);
+        int tmp_len = strlen(tmp);
+        char* tmpp = realloc(input, (input_len + tmp_len + 1) * sizeof(*input));
+        if (!tmpp) {
+            LOG(ERROR, "realloc failed!");
+            exit(1);
+        }
+        input = tmpp;
+        strcat(input, tmp);
+    }
     const char* delim = " \n";
     char* method = strtok(input, delim);
     char* request_target = strtok(NULL, delim);
