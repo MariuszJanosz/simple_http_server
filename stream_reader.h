@@ -7,7 +7,7 @@
 #define INPUT_QUEUE_CAPACITY (64 * 1024)
 
 typedef struct Input_queue_t {
-    char* queue[INPUT_QUEUE_CAPACITY];
+    char queue[INPUT_QUEUE_CAPACITY];
     int front;
     int rear;
     int reached_eof;
