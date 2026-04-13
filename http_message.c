@@ -74,6 +74,11 @@ int parse_request_line(Http_message_t* http_msg, Input_queue_t* iq) {
     char* request_target = strtok(NULL, delim);
     char* http_version = strtok(NULL, delim);
     char* leftover = strtok(NULL, delim);
+    if (!method || !request_target || !http_version) {
+        LOG(INFO, "Invalid request line, to few arguments!");
+        free(input);
+        return 0;
+    }
     if (leftover) {
         LOG(INFO, "Invalid request line, to many arguments!");
         free(input);
