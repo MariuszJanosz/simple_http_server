@@ -19,7 +19,7 @@ int main() {
     Tcp_connection_t tcp_connection;
     while (1) {
         tcp_connection = accept_tcp_connection(tcp_listener_fd);
-        if (fork()) {
+        if (fork()) { //It should be a thread pool instead of fork but ...
             close_tcp_connection(&tcp_connection);
             continue; //Parent keeps listening
         }
@@ -34,20 +34,24 @@ int main() {
     
     Http_message_t req;
     init_http_message(&req, HTTP_REQUEST);
-    int success = parse_request_line(&req, input_queue);
+    int success = parse_http_request(&req, input_queue);
     if (success) {
         Request_line_t* req_line = (Request_line_t*)req.start_line;
-        char* method = NULL;
-        switch (req_line->method) {
-            case HTTP_GET:
-                method = "GET";
-                break;
-            default:
-                method = "ERROR";
+        printf("---echo---\n");
+        printf("%s %s %s\n",
+                http_method_to_string(req_line->method),
+                req_line->request_target,
+                req_line->http_version);
+        for (int i = 0; i < req.field_lines_count; ++i) {
+            printf("%s %s\n", req.field_lines[i].field_name, req.field_lines[i].field_value);
         }
-        printf("Method: %s\n", method);
-        printf("Path: %s\n", req_line->request_target);
-        printf("Version: %s\n", req_line->http_version);
+        printf("\n");
+        const char* res_body = "<h1>Hello<h1/>";
+        const char* res = "HTTP/1.1 200 OK\r\nContent-Length: %zu\r\n\r\n%s";
+        printf(res, strlen(res_body), res_body);
+        printf("\n");
+        fprintf(tcp_connection.out_stream, res, strlen(res_body), res_body);
+        fflush(tcp_connection.out_stream);
     }
 
     close_tcp_connection(&tcp_connection);
