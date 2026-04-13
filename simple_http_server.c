@@ -16,7 +16,18 @@
 int main() {
     //Listen for tcp connection
     int tcp_listener_fd = create_tcp_listener(IP, PORT);
-    Tcp_connection_t tcp_connection = accept_tcp_connection(tcp_listener_fd);
+    Tcp_connection_t tcp_connection;
+    while (1) {
+        tcp_connection = accept_tcp_connection(tcp_listener_fd);
+        if (fork()) {
+            close_tcp_connection(&tcp_connection);
+            continue; //Parent keeps listening
+        }
+        else {
+            close_tcp_listener(tcp_listener_fd);
+            break; //Child deals with the established connection
+        }
+    }
     
     //Create in_stream reader
     Input_queue_t* input_queue = init_stream_reader(tcp_connection.in_stream);
