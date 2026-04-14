@@ -4,6 +4,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <ctype.h>
 
 void init_http_message(Http_message_t* http_msg, Message_type_t type) {
     http_msg->message_type = type;
@@ -167,8 +168,15 @@ int is_valid_field_value(char* value) {
 
 int parse_field_line(Http_message_t* http_msg, Input_queue_t* iq, int *is_empty) {
     char* input = get_line(iq);
+    // RFC9112 2.2 field lines starting with a white space shall be ignored
+    if (isspace(input[0])) {
+        if (input[0] == '\r' && input[1] == '\n') {
+            *is_empty = 1;
+        }
+        return 1;
+    }
     int input_len = strlen(input);
-    if (input_len == 1 || (input_len == 2 && input[0] == '\r')) {
+    if (input_len == 1) {
         *is_empty = 1;
         return 1;
     }
