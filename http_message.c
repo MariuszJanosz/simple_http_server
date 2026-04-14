@@ -113,7 +113,7 @@ again:
     char* method = strtok(input, delim);
     char* request_target = strtok(NULL, delim);
     char* http_version = strtok(NULL, delim);
-    char* leftover = strtok(NULL, delim);
+    char* leftover = strtok(NULL, "\n");
     if (!method || !request_target || !http_version) {
         LOG(INFO, "Invalid request line, to few arguments!");
         free(input);
