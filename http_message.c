@@ -101,7 +101,14 @@ char* get_line(Input_queue_t* iq) {
 }
 
 int parse_request_line(Http_message_t* http_msg, Input_queue_t* iq) {
+again:
     char* input = get_line(iq);
+    //RFC9112 2.2 empty line before request-line should be ignored
+    if (strcmp(input, "\r\n") == 0 || strcmp(input, "\n") == 0) {
+        free(input);
+        input = NULL;
+        goto again;
+    }
     const char* delim = " \n";
     char* method = strtok(input, delim);
     char* request_target = strtok(NULL, delim);
