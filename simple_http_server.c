@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <threads.h>
+#include <signal.h>
 
 #include <unistd.h>
 
@@ -14,6 +15,8 @@
 #define PORT 54321
 
 int main() {
+    signal(SIGCHLD, SIG_IGN);
+
     //Listen for tcp connection
     int tcp_listener_fd = create_tcp_listener(IP, PORT);
     Tcp_connection_t tcp_connection;
