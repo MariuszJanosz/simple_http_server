@@ -117,10 +117,10 @@ typedef struct Http_message_t {
 } Http_message_t;
 
 void init_http_message(Http_message_t* http_msg, Message_type_t type);
-int parse_request_line(Http_message_t* http_msg, Input_queue_t* iq);
-int parse_field_line(Http_message_t* http_msg, Input_queue_t* iq, int *is_empty);
-int read_body(Http_message_t* http_msg, Input_queue_t* iq);
-int parse_http_request(Http_message_t* http_msg, Input_queue_t* iq);
+Http_status_t parse_request_line(Http_message_t* http_msg, Input_queue_t* iq);
+Http_status_t parse_field_line(Http_message_t* http_msg, Input_queue_t* iq, int *is_empty);
+Http_status_t read_body(Http_message_t* http_msg, Input_queue_t* iq);
+Http_status_t parse_http_request(Http_message_t* http_msg, Input_queue_t* iq);
 
 const char* http_method_to_string(Method_t method);
 const char* http_status_to_string(Http_status_t status);

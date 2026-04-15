@@ -70,17 +70,17 @@ Method_t str_to_http_method(char* str) {
     }
 }
 
-int is_valid_request_target(char* str) {
+Http_status_t is_valid_request_target(char* str) {
     //TODO for now assume it is a valid request target
-    return 1;
+    return HTTP_STATUS_OK;
 }
 
-int is_valid_http_version(char* str) {
+Http_status_t is_valid_http_version(char* str) {
     //support http/1.1 only
     if (strcmp(str, "HTTP/1.1") == 0) {
-        return 1;
+        return HTTP_STATUS_OK;
     }
-    return 0;
+    return HTTP_STATUS_HTTP_VERSION_NOT_SUPPORTED;
 }
 
 char* get_line(Input_queue_t* iq) {
@@ -101,7 +101,7 @@ char* get_line(Input_queue_t* iq) {
     return line;
 }
 
-int parse_request_line(Http_message_t* http_msg, Input_queue_t* iq) {
+Http_status_t parse_request_line(Http_message_t* http_msg, Input_queue_t* iq) {
 again:
     char* input = get_line(iq);
     //RFC9112 2.2 empty line before request-line should be ignored
@@ -118,26 +118,26 @@ again:
     if (!method || !request_target || !http_version) {
         LOG(INFO, "Invalid request line, to few arguments!");
         free(input);
-        return 0;
+        return HTTP_STATUS_BAD_REQUEST;
     }
     if (leftover) {
         LOG(INFO, "Invalid request line, to many arguments!");
         free(input);
-        return 0;
+        return HTTP_STATUS_BAD_REQUEST;
     }
     Request_line_t rl;
     rl.method = str_to_http_method(method);
     if (rl.method == HTTP_UNKNOWN_METHOD) {
         LOG(INFO, "Unknown http method!");
         free(input);
-        return 0;
+        return HTTP_STATUS_BAD_REQUEST;
     }
     rl.request_target = strdup(request_target);
-    if (!is_valid_request_target(rl.request_target)) {
+    if (is_valid_request_target(rl.request_target) != HTTP_STATUS_OK) {
         LOG(INFO, "Invalid http request target!");
         free(input);
         free(rl.request_target);
-        return 0;
+        return HTTP_STATUS_BAD_REQUEST;
     }
     int l = strlen(http_version);
     if (l > 0 && http_version[l - 1] == '\r') {
@@ -149,43 +149,38 @@ again:
         free(input);
         free(rl.request_target);
         free(rl.http_version);
-        return 0;
+        return HTTP_STATUS_HTTP_VERSION_NOT_SUPPORTED;
     }
     free(input);
     http_msg->start_line = (Request_line_t*)malloc(sizeof(rl));
     memcpy(http_msg->start_line, &rl, sizeof(rl));
-    return 1;
+    return HTTP_STATUS_OK;
 }
 
 //For now accept everything
-int is_valid_field_name(char* name) {
-    return 1;
+Http_status_t is_valid_field_name(char* name) {
+    return HTTP_STATUS_OK;
 }
 
-int is_valid_field_value(char* value) {
-    return 1;
+Http_status_t is_valid_field_value(char* value) {
+    return HTTP_STATUS_OK;
 }
 
-int parse_field_line(Http_message_t* http_msg, Input_queue_t* iq, int *is_empty) {
+Http_status_t parse_field_line(Http_message_t* http_msg, Input_queue_t* iq, int *is_empty) {
     char* input = get_line(iq);
     // RFC9112 2.2 field lines starting with a white space shall be ignored
     if (isspace(input[0])) {
-        if (input[0] == '\r' && input[1] == '\n') {
+        if ((input[0] == '\r' && input[1] == '\n') || input[0] == '\n') {
             *is_empty = 1;
         }
-        return 1;
-    }
-    int input_len = strlen(input);
-    if (input_len == 1) {
-        *is_empty = 1;
-        return 1;
+        return HTTP_STATUS_OK;
     }
     char* name = strtok(input, " \n");
     char* value = strtok(NULL, "\n");
     if (!name || !value) {
         LOG(INFO, "Invalid field line, to few arguments!");
         free(input);
-        return 0;
+        return HTTP_STATUS_BAD_REQUEST;
     }
     Field_line_t fl;
     fl.field_name = strdup(name);
@@ -193,7 +188,7 @@ int parse_field_line(Http_message_t* http_msg, Input_queue_t* iq, int *is_empty)
         LOG(INFO, "Invalid field name!");
         free(input);
         free(fl.field_name);
-        return 0;
+        return HTTP_STATUS_BAD_REQUEST;
     }
     int l = strlen(value);
     if (l > 0 && value[l - 1] == '\r') {
@@ -205,7 +200,7 @@ int parse_field_line(Http_message_t* http_msg, Input_queue_t* iq, int *is_empty)
         free(input);
         free(fl.field_name);
         free(fl.field_value);
-        return 0;
+        return HTTP_STATUS_BAD_REQUEST;
     }
     free(input);
     if (http_msg->field_lines_count == http_msg->field_lines_capacity) {
@@ -220,11 +215,11 @@ int parse_field_line(Http_message_t* http_msg, Input_queue_t* iq, int *is_empty)
     }
     memcpy(&http_msg->field_lines[http_msg->field_lines_count], &fl, sizeof(fl));
     http_msg->field_lines_count += 1;
-    return 1;
+    return HTTP_STATUS_OK;
 }
 
 //For now requests cannot have bodies
-int read_body(Http_message_t* http_msg, Input_queue_t* iq) {
+Http_status_t read_body(Http_message_t* http_msg, Input_queue_t* iq) {
     return 0;
 }
 
@@ -232,29 +227,26 @@ int should_have_body(Http_message_t* http_msg) {
     return 0;
 }
 
-int parse_http_request(Http_message_t* http_msg, Input_queue_t* iq) {
-    int res = 1;
-    res = res && parse_request_line(http_msg, iq);
-    if (!res) {
-        LOG(INFO, "parse_request_line failed!");
-        return res;
-    }
+Http_status_t parse_http_request(Http_message_t* http_msg, Input_queue_t* iq) {
+    Http_status_t status = parse_request_line(http_msg, iq);
     int is_empty = 0;
     while (!is_empty) {
-        res = res && parse_field_line(http_msg, iq, &is_empty);
-        if (!res) {
-            LOG(INFO, "parse_field_line failed!");
-            return res;
+        if (status == HTTP_STATUS_OK) {
+            status = parse_field_line(http_msg, iq, &is_empty);
+        }
+        else {
+            parse_field_line(http_msg, iq, &is_empty);
         }
     }
     if (should_have_body(http_msg)) {
-        res = res && read_body(http_msg, iq);
-        if (!res) {
-            LOG(INFO, "read_body failed!");
-            return res;
+        if (status == HTTP_STATUS_OK) {
+            status = read_body(http_msg, iq);
+        }
+        else {
+            read_body(http_msg, iq);
         }
     }
-    return res;
+    return status;
 }
 
 const char* http_status_to_string(Http_status_t status) {
