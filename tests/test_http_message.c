@@ -12,14 +12,14 @@ void test_init_http_message() {
     init_http_message(&msg, HTTP_REQUEST);
     TEST_ASSERT_EQUAL_INT(HTTP_REQUEST, msg.message_type);
     TEST_ASSERT_NULL(msg.start_line);
-    TEST_ASSERT_NULL(msg.field_lines);
+    TEST_ASSERT_NOT_NULL(msg.field_lines);
     TEST_ASSERT_EQUAL_INT(0, msg.field_lines_count);
     TEST_ASSERT_NULL(msg.message_body);
 
     init_http_message(&msg, HTTP_RESPONSE);
     TEST_ASSERT_EQUAL_INT(HTTP_RESPONSE, msg.message_type);
     TEST_ASSERT_NULL(msg.start_line);
-    TEST_ASSERT_NULL(msg.field_lines);
+    TEST_ASSERT_NOT_NULL(msg.field_lines);
     TEST_ASSERT_EQUAL_INT(0, msg.field_lines_count);
     TEST_ASSERT_NULL(msg.message_body);
 }

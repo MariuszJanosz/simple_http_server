@@ -1,6 +1,7 @@
 #include "http_message.h"
 #include "log.h"
 #include "stream_reader.h"
+#include "uri.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -70,8 +71,66 @@ Method_t str_to_http_method(char* str) {
     }
 }
 
+int is_valid_absolute_form(const char* str) {
+    return uri_is_absolute_uri(str, strlen(str));
+}
+
+int is_valid_origin_form(const char* str) {
+    /*origin-form = 1*( "/" segment ) [ "?" query ]*/
+    int i = 0;
+    int len;
+    len = strlen(str);
+    while (i < len) {
+        if (0x3F == str[i] /*?*/) {
+            break;
+        }
+        i += 1;
+    }
+    if (i == len) { /*there is no ( "?" query ) part*/
+        return (len > 0) && uri_is_path_abempty(str, len);
+    }
+    return  (i > 0) &&
+            uri_is_path_abempty(str, i) &&
+            uri_is_query(str + i + 1, len - (i + 1));
+}
+
+int is_valid_authority_form(const char* str) {
+    int i = 0;
+    int len = 0;
+    len = strlen(str);
+    while (i < len) {
+        if (0x3A == str[i]) {
+            break;
+        }
+        i += 1;
+    }
+    if (i == len) {
+        return 0;
+    }
+    return  uri_is_host(str, i) &&
+            uri_is_port(str + i + 1, len - (i + 1));
+}
+
 Http_status_t is_valid_request_target(char* str) {
-    //TODO for now assume it is a valid request target
+    char* ptr = str;
+    while (*ptr) {
+        if (isspace(*ptr)) { //No spaces allowed RFC9112 3.2
+            return HTTP_STATUS_BAD_REQUEST;
+        }
+        ptr += 1;
+    }
+    if (str[0] == '*') { //Asterisk-form
+        if (str[1] != '\0') {
+            return HTTP_STATUS_BAD_REQUEST;
+        }
+    }
+    else {
+        if (!is_valid_absolute_form(str) &&
+            !is_valid_origin_form(str) &&
+            !is_valid_authority_form(str)) {
+            return HTTP_STATUS_BAD_REQUEST;
+        }
+    }
     return HTTP_STATUS_OK;
 }
 

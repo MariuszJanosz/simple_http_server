@@ -8,7 +8,7 @@ if (BUILD_TESTING)
 
 	add_executable(test_http_message test_http_message.c ${CMAKE_SOURCE_DIR}/http_message.c
 		${CMAKE_SOURCE_DIR}/http_message.h ${CMAKE_SOURCE_DIR}/stream_reader.c
-		${CMAKE_SOURCE_DIR}/stream_reader.h ${UNITY_DIR}/unity.h)
+		${CMAKE_SOURCE_DIR}/stream_reader.h ${UNITY_DIR}/unity.h ${CMAKE_SOURCE_DIR}/abnf.c ${CMAKE_SOURCE_DIR}/abnf.h ${CMAKE_SOURCE_DIR}/uri.c ${CMAKE_SOURCE_DIR}/uri.h)
 	target_link_libraries(test_http_message PRIVATE unity)
 	target_include_directories(test_http_message PRIVATE ${UNITY_DIR} ${CMAKE_SOURCE_DIR})
 
