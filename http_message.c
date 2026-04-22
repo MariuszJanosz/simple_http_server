@@ -98,8 +98,13 @@ int is_valid_authority_form(const char* str) {
     int i = 0;
     int len = 0;
     len = strlen(str);
+    if (str[i] == '[') {
+        while (str[i] != '\0' && str[i] != ']') {
+            ++i;
+        }
+    }
     while (i < len) {
-        if (0x3A == str[i]) {
+        if (0x3A == str[i] /*:*/) {
             break;
         }
         i += 1;
@@ -234,7 +239,7 @@ Http_status_t parse_field_line(Http_message_t* http_msg, Input_queue_t* iq, int 
         }
         return HTTP_STATUS_OK;
     }
-    char* name = strtok(input, " \n");
+    char* name = strtok(input, ":");
     char* value = strtok(NULL, "\n");
     if (!name || !value) {
         LOG(INFO, "Invalid field line, to few arguments!");
@@ -250,10 +255,15 @@ Http_status_t parse_field_line(Http_message_t* http_msg, Input_queue_t* iq, int 
         return HTTP_STATUS_BAD_REQUEST;
     }
     int l = strlen(value);
-    if (l > 0 && value[l - 1] == '\r') {
-        value[l - 1] = '\0';
+    char* tmp = value;
+    while (l > 0 && (tmp[l - 1] == '\r' || tmp[l - 1] == ' ')) {
+        l -= 1;
+        tmp[l] = '\0';
     }
-    fl.field_value = strdup(value);
+    while (*tmp == ' ') {
+        tmp += 1;
+    }
+    fl.field_value = strdup(tmp);
     if (!is_valid_field_value(fl.field_value)) {
         LOG(INFO, "Invalid field value!");
         free(input);
@@ -286,6 +296,110 @@ int should_have_body(Http_message_t* http_msg) {
     return 0;
 }
 
+int has_field(Http_message_t* http_msg, char* field_name, int* out_index) {
+    int i;
+    for (i = 0; i < http_msg->field_lines_count; ++i) {
+        char *name = http_msg->field_lines[i].field_name;
+        int j = 0;
+        while (name[j] != '\0' && field_name[j] != '\0') {
+            if (tolower(name[j]) == tolower(field_name[j])) {
+                j += 1;
+            }
+            else {
+                break;
+            }
+        }
+        if (name[j] == '\0' && field_name[j] == '\0') {
+            break;
+        }
+    }
+    if (i == http_msg->field_lines_count) {
+        return 0;
+    }
+    if (out_index) {
+        *out_index = i;
+    }
+    return 1;
+}
+
+Http_status_t host_field_matches_request_target(Http_message_t* http_msg) {
+    int host_field_index;
+    int has_host_field = has_field(http_msg, "Host", &host_field_index);
+    Http_status_t status = HTTP_STATUS_OK;
+    if (!has_host_field) {
+        status =  HTTP_STATUS_BAD_REQUEST;
+    }
+    else {
+        char* host_value = http_msg->field_lines[host_field_index].field_value;
+        char* request_target = ((Request_line_t*)(http_msg->start_line))->request_target;
+        if (is_valid_authority_form(request_target)) {
+            int i = 0;
+            while (request_target[i] != '@' && request_target[i] != '\0') {
+                i += 1;
+            }
+            if (request_target[i] == '@') { /*host-uri = request_target[i+1:]*/
+                if (strcmp(host_value, &request_target[i + 1]) != 0) {
+                    status = HTTP_STATUS_BAD_REQUEST;
+                }
+            }
+            else { /*host-uri = request_target[:]*/
+                if (strcmp(host_value, request_target) != 0) {
+                    status = HTTP_STATUS_BAD_REQUEST;
+                }
+            }
+        }
+        else if (is_valid_absolute_form(request_target)) {
+            int i = 0;
+            while (request_target[i] != ':') {
+                i += 1;
+            }
+            i += 1;
+            if (request_target[i] == '/' && request_target[i + 1] == '/') {
+                i += 2;
+                /*now i points to the start of authority*/
+                int j = i;
+                while ( request_target[j] != '?' &&
+                        request_target[j] != '@' &&
+                        request_target[j] != '\0') {
+                    j += 1;
+                }
+                if (request_target[j] == '?') { /*host-uri = request_target[i:j]*/
+                    request_target[j] = '\0';
+                    if (strcmp(host_value, &request_target[i]) != 0) {
+                        status = HTTP_STATUS_BAD_REQUEST;
+                    }
+                    request_target[j] = '?';
+                }
+                else if (request_target[j] == '@') {
+                    j += 1;
+                    i = j; /*now i points to the start of host-uri*/
+                    while (request_target[j] != '?' && request_target[j] != '\0') {
+                        j += 1;
+                    }
+                    if (request_target[j] == '\0') {
+                        if (strcmp(host_value, &request_target[i]) != 0) {
+                            status = HTTP_STATUS_BAD_REQUEST;
+                        }
+                    }
+                    else {
+                        request_target[j] = '\0';
+                        if (strcmp(host_value, &request_target[i]) != 0) {
+                            status = HTTP_STATUS_BAD_REQUEST;
+                        }
+                        request_target[j] = '?';
+                    }
+                }
+                else {
+                    if (strcmp(host_value, &request_target[i]) != 0) {
+                        status = HTTP_STATUS_BAD_REQUEST;
+                    }
+                }
+            }
+        }
+    }
+    return status;
+}
+
 Http_status_t parse_http_request(Http_message_t* http_msg, Input_queue_t* iq) {
     Http_status_t status = parse_request_line(http_msg, iq);
     int is_empty = 0;
@@ -304,6 +418,9 @@ Http_status_t parse_http_request(Http_message_t* http_msg, Input_queue_t* iq) {
         else {
             read_body(http_msg, iq);
         }
+    }
+    if (status == HTTP_STATUS_OK) {
+        status = host_field_matches_request_target(http_msg);
     }
     return status;
 }
