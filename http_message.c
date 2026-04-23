@@ -325,9 +325,33 @@ int has_field(Http_message_t* http_msg, char* field_name, int* out_index) {
 Http_status_t host_field_matches_request_target(Http_message_t* http_msg) {
     int host_field_index;
     int has_host_field = has_field(http_msg, "Host", &host_field_index);
-    Http_status_t status = HTTP_STATUS_OK;
-    if (!has_host_field) {
-        status =  HTTP_STATUS_BAD_REQUEST;
+    //Two host lines are also bad request
+    if (has_host_field) {
+        int second_host_field_index = host_field_index + 1;
+        while (second_host_field_index < http_msg->field_lines_count) {
+            char* name = http_msg->field_lines[second_host_field_index].field_name;
+            char field_name[] = "Host";
+            int j = 0;
+            while (name[j] != '\0' && field_name[j] != '\0') {
+                if (tolower(name[j]) == tolower(field_name[j])) {
+                    j += 1;
+                }
+                else {
+                    break;
+                }
+            }
+            if (name[j] == '\0' && field_name[j] == '\0') {
+                break;
+            }
+            second_host_field_index += 1;
+        }
+        if (second_host_field_index < http_msg->field_lines_count) {
+            return HTTP_STATUS_BAD_REQUEST;
+        }
+    }
+    
+    if (!has_host_field) { //Host is required
+        return HTTP_STATUS_BAD_REQUEST;
     }
     else {
         char* host_value = http_msg->field_lines[host_field_index].field_value;
@@ -339,12 +363,12 @@ Http_status_t host_field_matches_request_target(Http_message_t* http_msg) {
             }
             if (request_target[i] == '@') { /*host-uri = request_target[i+1:]*/
                 if (strcmp(host_value, &request_target[i + 1]) != 0) {
-                    status = HTTP_STATUS_BAD_REQUEST;
+                    return HTTP_STATUS_BAD_REQUEST;
                 }
             }
             else { /*host-uri = request_target[:]*/
                 if (strcmp(host_value, request_target) != 0) {
-                    status = HTTP_STATUS_BAD_REQUEST;
+                    return HTTP_STATUS_BAD_REQUEST;
                 }
             }
         }
@@ -353,7 +377,7 @@ Http_status_t host_field_matches_request_target(Http_message_t* http_msg) {
             while (request_target[i] != ':') {
                 i += 1;
             }
-            i += 1;
+            i += 1; //Now we are past scheme ":"
             if (request_target[i] == '/' && request_target[i + 1] == '/') {
                 i += 2;
                 /*now i points to the start of authority*/
@@ -366,7 +390,7 @@ Http_status_t host_field_matches_request_target(Http_message_t* http_msg) {
                 if (request_target[j] == '?') { /*host-uri = request_target[i:j]*/
                     request_target[j] = '\0';
                     if (strcmp(host_value, &request_target[i]) != 0) {
-                        status = HTTP_STATUS_BAD_REQUEST;
+                        return HTTP_STATUS_BAD_REQUEST;
                     }
                     request_target[j] = '?';
                 }
@@ -375,29 +399,37 @@ Http_status_t host_field_matches_request_target(Http_message_t* http_msg) {
                     i = j; /*now i points to the start of host-uri*/
                     while (request_target[j] != '?' && request_target[j] != '\0') {
                         j += 1;
-                    }
+                    }/*host-uri = request_target[i:j]*/
                     if (request_target[j] == '\0') {
                         if (strcmp(host_value, &request_target[i]) != 0) {
-                            status = HTTP_STATUS_BAD_REQUEST;
+                            return HTTP_STATUS_BAD_REQUEST;
                         }
                     }
                     else {
                         request_target[j] = '\0';
                         if (strcmp(host_value, &request_target[i]) != 0) {
-                            status = HTTP_STATUS_BAD_REQUEST;
+                            return HTTP_STATUS_BAD_REQUEST;
                         }
                         request_target[j] = '?';
                     }
                 }
-                else {
+                else {/*host-uri = request_target[i:]*/
                     if (strcmp(host_value, &request_target[i]) != 0) {
-                        status = HTTP_STATUS_BAD_REQUEST;
+                        return HTTP_STATUS_BAD_REQUEST;
                     }
                 }
             }
         }
+        else if (is_valid_origin_form(request_target)) {
+            //In origin-form target URIs host is derived from host field line,
+            //so we don't have to do anything
+        }
+        else {//It is asterisk-form
+            //TODO
+        }
     }
-    return status;
+    
+    return HTTP_STATUS_OK;
 }
 
 Http_status_t parse_http_request(Http_message_t* http_msg, Input_queue_t* iq) {
