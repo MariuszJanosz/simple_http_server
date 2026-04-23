@@ -419,6 +419,11 @@ Http_status_t host_field_matches_request_target(Http_message_t* http_msg) {
                     }
                 }
             }
+            else { //there is no authority in hier-part, host field should have empty value
+                if (strcmp(host_value, "") != 0) {
+                    return HTTP_STATUS_BAD_REQUEST;
+                }
+            }
         }
         else if (is_valid_origin_form(request_target)) {
             //In origin-form target URIs host is derived from host field line,
