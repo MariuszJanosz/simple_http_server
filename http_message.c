@@ -2,11 +2,13 @@
 #include "log.h"
 #include "stream_reader.h"
 #include "uri.h"
+#include "tcp_connection.h"
 
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <inttypes.h>
+#include <stddef.h>
 
 void init_http_message(Http_message_t* http_msg, Message_type_t type) {
     http_msg->message_type = type;
@@ -683,4 +685,95 @@ const char* http_status_to_string(Http_status_t status) {
             return "Unknown status code!";
     }
 }
+
+void write_response_status_line(Http_message_t* http_msg, char* http_version, char* status, char* reason) {
+    Status_line_t sl;
+    sl.http_version = http_version;
+    sl.status_code = status;
+    sl.status_text = reason;
+    http_msg->start_line = malloc(sizeof(sl));
+    if (!(http_msg->start_line)) {
+        LOG(ERROR, "malloc failed!");
+        exit(1);
+    }
+    memcpy(http_msg->start_line, &sl, sizeof(sl));
+}
+
+void write_response_field_line(Http_message_t* http_msg, char* field_name, char* field_value) {
+    if (http_msg->field_lines_count == http_msg->field_lines_capacity) {
+        http_msg->field_lines_capacity *= 2;
+        Field_line_t* tmp = realloc(http_msg->field_lines, http_msg->field_lines_capacity * sizeof(*tmp));
+        if (!tmp) {
+            LOG(ERROR, "realloc failed!");
+            exit(1);
+        }
+        http_msg->field_lines = tmp;
+    }
+    http_msg->field_lines[http_msg->field_lines_count].field_name = field_name;
+    http_msg->field_lines[http_msg->field_lines_count].field_value = field_value;
+    http_msg->field_lines_count += 1;
+}
+
+void write_response_body_content_length(Http_message_t* http_msg, char* body, intmax_t content_length) {
+    http_msg->message_body = body;
+    http_msg->body_size = (size_t)content_length;
+}
+
+intmax_t get_response_size(Http_message_t* http_msg) {
+    intmax_t msg_size = 0;
+    msg_size += strlen(((Status_line_t*)(http_msg->start_line))->http_version);
+    msg_size += 1;//" "
+    msg_size += strlen(((Status_line_t*)(http_msg->start_line))->status_code);
+    msg_size += 1;//" "
+    msg_size += strlen(((Status_line_t*)(http_msg->start_line))->status_text);
+    msg_size += 2;//CRLF
+    for (int i = 0; i < http_msg->field_lines_count; ++i) {
+        msg_size += strlen(http_msg->field_lines[i].field_name);
+        msg_size += 1;//":"
+        msg_size += strlen(http_msg->field_lines[i].field_value);
+        msg_size += 2;//CRLF
+    }
+    msg_size += 2;//CRLF
+    if (http_msg->body_size) {
+        msg_size += http_msg->body_size;
+    }
+}
+
+void send_response(Tcp_connection_t tcp_con, Http_message_t* http_msg) {
+    intmax_t msg_size = get_response_size(http_msg);
+    char* response = malloc(msg_size * sizeof(*response));
+    if (!response) {
+        LOG(ERROR, "malloc failed!");
+        exit(1);
+    }
+    intmax_t count = 0;
+    //Prepare status line
+    count += sprintf(response + count, "%s %s %s\r\n",
+                ((Status_line_t*)(http_msg->start_line))->http_version,
+                ((Status_line_t*)(http_msg->start_line))->status_code,
+                ((Status_line_t*)(http_msg->start_line))->status_text);
+    //Prepare field lines
+    for (int i = 0; i < http_msg->field_lines_count; ++i) {
+        count += sprintf(response + count, "%s:%s\r\n",
+                http_msg->field_lines[i].field_name,
+                http_msg->field_lines[i].field_value);
+    }
+    //CRLF
+    count += sprintf(response + count, "\r\n");
+    count += sprintf(response + count, "%.*s",
+                (int)http_msg->body_size,
+                http_msg->message_body);
+    if (count < msg_size) {
+        LOG(ERROR, "Faild to prepare message!");
+        exit(1);
+    }
+    fprintf(tcp_con.out_stream, "%.*s",
+                (int)count,
+                response);
+    fflush(tcp_con.out_stream);
+}
+
+void send_response_sendfile(Tcp_connection_t tcp_con, Http_message_t* http_msg, int fd);
+void send_response_chunked(Tcp_connection_t tcp_con, Http_message_t* http_msg, int fd, Chunker_func_t chunker);
+void default_chunker(int fd, char* chunk, intmax_t* bytes_read, int* finished);
 

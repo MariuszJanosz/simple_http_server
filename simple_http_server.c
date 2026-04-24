@@ -49,9 +49,9 @@ int main() {
     Request_line_t* req_line = (Request_line_t*)req.start_line;
     printf("---req---echo---\n");
     printf("%s %s %s\n",
-    http_method_to_string(req_line->method),
-    req_line->request_target,
-    req_line->http_version);
+        http_method_to_string(req_line->method),
+        req_line->request_target,
+        req_line->http_version);
     for (int i = 0; i < req.field_lines_count; ++i) {
         printf("%s: %s\n", req.field_lines[i].field_name, req.field_lines[i].field_value);
     }
@@ -60,29 +60,31 @@ int main() {
         printf("%.*s\n", (int)req.body_size, req.message_body);
         printf("\n");
     }
+    Http_message_t res;
+    init_http_message(&res, HTTP_RESPONSE);
+    char status_char[4];
+    sprintf(status_char, "%d", status);
     switch (status) {
         case HTTP_STATUS_OK:
             {
-                const char* res_body = "<h1>Hello</h1>";
-                const char* res = "HTTP/1.1 %d %s\r\nContent-Length: %zu\r\n\r\n%s";
-                printf("---res---echo---\n");
-                printf(res, status, http_status_to_string(status), strlen(res_body), res_body);
-                printf("\n");
-                fprintf(s.tcp_connection.out_stream, res, status,
-                        http_status_to_string(status), strlen(res_body), res_body);
-                fflush(s.tcp_connection.out_stream);
+                write_response_status_line(&res, "HTTP/1.1", status_char, (char*)http_status_to_string(status));
+                char* body = "<h1>Hello</h1>";
+                char size[1024];
+                sprintf(size, "%d", (int)strlen(body));
+                write_response_field_line(&res, "Content-length", size);
+                write_response_body_content_length(&res, body, (intmax_t)strlen(body));
+                send_response(s.tcp_connection, &res);
             }
             break;
         default:
             {
-                const char* res_body = "<h1>Error</h1>";
-                const char* res = "HTTP/1.1 %d %s\r\nContent-Length: %zu\r\n\r\n%s";
-                printf("---res---echo---\n");
-                printf(res, status, http_status_to_string(status), strlen(res_body), res_body);
-                printf("\n");
-                fprintf(s.tcp_connection.out_stream, res, status,
-                        http_status_to_string(status), strlen(res_body), res_body);
-                fflush(s.tcp_connection.out_stream);
+                write_response_status_line(&res, "HTTP/1.1", status_char, (char*)http_status_to_string(status));
+                char* body = "<h1>default</h1>";
+                char size[1024];
+                sprintf(size, "%d", (int)strlen(body));
+                write_response_field_line(&res, "Content-length", size);
+                write_response_body_content_length(&res, body, (intmax_t)strlen(body));
+                send_response(s.tcp_connection, &res);
             }
             break;
     }
