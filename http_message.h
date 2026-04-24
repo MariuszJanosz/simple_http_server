@@ -3,6 +3,10 @@
 
 #include "stream_reader.h"
 
+#include <stddef.h>
+
+#define MAX_BODY_SIZE (100 * 1024 * 1024) //100MB
+
 typedef enum {
     //1xx - Informational
     HTTP_STATUS_CONTINUE = 100,
@@ -114,6 +118,7 @@ typedef struct Http_message_t {
     int field_lines_count;
     int field_lines_capacity;
     char* message_body;
+    size_t body_size;
 } Http_message_t;
 
 void init_http_message(Http_message_t* http_msg, Message_type_t type);
@@ -124,6 +129,8 @@ Http_status_t parse_http_request(Http_message_t* http_msg, Input_queue_t* iq);
 
 const char* http_method_to_string(Method_t method);
 const char* http_status_to_string(Http_status_t status);
+
+int has_field(Http_message_t* http_msg, char* field_name, int* out_index);
 
 #endif //HTTP_MESSAGE_H
 

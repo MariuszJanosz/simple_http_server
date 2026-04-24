@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <threads.h>
+#include <inttypes.h>
 
 #define INPUT_QUEUE_CAPACITY (64 * 1024)
 
@@ -27,7 +28,7 @@ typedef struct Stream_reader_context_t {
 void init_input_queue(Input_queue_t* iq);
 void free_input_queue(Input_queue_t* iq);
 int stream_reader_thr(void* reader_context);
-int get_data(Input_queue_t* iq, char* output, int count);
+int get_data(Input_queue_t* iq, char* output, intmax_t count);
 int is_reading_finished(Input_queue_t* iq);
 Input_queue_t* init_stream_reader(FILE* stream); 
 char* input_queue_get_line(Input_queue_t* iq, int* new_line_found);

@@ -56,6 +56,10 @@ int main() {
         printf("%s: %s\n", req.field_lines[i].field_name, req.field_lines[i].field_value);
     }
     printf("\n");
+    if (req.message_body) {
+        printf("%.*s\n", (int)req.body_size, req.message_body);
+        printf("\n");
+    }
     switch (status) {
         case HTTP_STATUS_OK:
             {

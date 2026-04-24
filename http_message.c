@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <inttypes.h>
 
 void init_http_message(Http_message_t* http_msg, Message_type_t type) {
     http_msg->message_type = type;
@@ -19,6 +20,7 @@ void init_http_message(Http_message_t* http_msg, Message_type_t type) {
         exit(1);
     }
     http_msg->message_body = NULL;
+    http_msg->body_size = 0;
 }
 
 const char* http_method_to_string(Method_t method) {
@@ -287,13 +289,102 @@ Http_status_t parse_field_line(Http_message_t* http_msg, Input_queue_t* iq, int 
     return HTTP_STATUS_OK;
 }
 
-//For now requests cannot have bodies
-Http_status_t read_body(Http_message_t* http_msg, Input_queue_t* iq) {
-    return 0;
+Http_status_t read_body_cl(Http_message_t* http_msg, Input_queue_t* iq, intmax_t content_length) {
+    unsigned char* body_data = malloc(content_length * sizeof(*body_data));
+    if (!body_data) {
+        LOG(ERROR, "malloc failed!");
+        exit(1);
+    }
+    intmax_t read = 0;
+    while (read < content_length) {
+        unsigned char* first_empty = body_data + read;
+        intmax_t to_read = content_length - read;
+        read += get_data(iq, first_empty, to_read);
+    }
+    http_msg->message_body = body_data;
+    http_msg->body_size = content_length;
+    return HTTP_STATUS_OK;
 }
 
-int should_have_body(Http_message_t* http_msg) {
-    return 0;
+Http_status_t read_body_chunked(Http_message_t* http_msg, Input_queue_t* iq) {
+    size_t data_capacity = 1024; //1kB
+    unsigned char* body_data = malloc(data_capacity * sizeof(*body_data));
+    size_t data_first_free_index = 0;
+    if (!body_data) {
+        LOG(ERROR, "malloc failed!");
+        exit(1);
+    }
+    int finished = 0;
+    while (!finished) {
+        char* size = get_line(iq);
+        int len = strlen(size);
+        size[--len] = '\0'; // '\n'->'\0'
+        if (size[len - 1] == '\r') {
+            size[--len] = '\0'; // '\r'->'\0'
+        }
+        char *end;
+        intmax_t content_length = strtoimax(size, &end, 16);
+        if (*end != '\0' || content_length < 0) {
+            free(size);
+            return HTTP_STATUS_BAD_REQUEST;
+        }
+        else if (content_length > MAX_BODY_SIZE) {
+            free(size);
+            return HTTP_STATUS_PAYLOAD_TOO_LARGE;
+        }
+        else if (content_length == 0) {
+            finished = 1;
+        }
+        else {
+            Http_message_t fake_tmp;
+            fake_tmp.message_body = NULL;
+            read_body_cl(&fake_tmp, iq, content_length);
+            if (content_length > (data_capacity - data_first_free_index)) {
+                while (content_length > (data_capacity - data_first_free_index)) {
+                    data_capacity *= 2;
+                }
+                unsigned char* tmp = realloc(body_data, data_capacity * sizeof(*body_data));
+                if (!tmp) {
+                    LOG(ERROR, "realloc failed!");
+                    exit(1);
+                }
+                body_data = tmp;
+            }
+            memcpy(body_data + data_first_free_index, fake_tmp.message_body, content_length);
+            data_first_free_index += content_length;
+            free(fake_tmp.message_body);
+        }
+        free(size);
+        free(get_line(iq)); //Flush remaining \r\n
+    }
+    http_msg->message_body = body_data;
+    http_msg->body_size = data_first_free_index;
+    return HTTP_STATUS_OK;
+}
+
+//For now it works only for requests like Transfer-Encoding: chunked but not for Transfer-Encoding:chunked,gzip
+Http_status_t read_body(Http_message_t* http_msg, Input_queue_t* iq) {
+    int transfer_encoding_index;
+    if (has_field(http_msg, "Transfer-Encoding", &transfer_encoding_index)) {
+        char* transfer_encoding_val = http_msg->field_lines[transfer_encoding_index].field_value;
+        if (strcmp(transfer_encoding_val, "chunked") == 0) {
+            return read_body_chunked(http_msg, iq);
+        }
+    }
+    int content_length_index;
+    if (has_field(http_msg, "Content-Length", &content_length_index)) {
+        char* str = http_msg->field_lines[content_length_index].field_value;
+        char* end;
+        intmax_t content_length = strtoimax(str, &end, 10);
+        if (*end != '\0' || content_length < 0) {
+            return HTTP_STATUS_BAD_REQUEST;
+        }
+        if (content_length > MAX_BODY_SIZE) {
+            return HTTP_STATUS_PAYLOAD_TOO_LARGE;
+        }
+        return read_body_cl(http_msg, iq, content_length);
+    }
+    return HTTP_STATUS_OK; //There is no body
 }
 
 int has_field(Http_message_t* http_msg, char* field_name, int* out_index) {
@@ -448,13 +539,11 @@ Http_status_t parse_http_request(Http_message_t* http_msg, Input_queue_t* iq) {
             parse_field_line(http_msg, iq, &is_empty);
         }
     }
-    if (should_have_body(http_msg)) {
-        if (status == HTTP_STATUS_OK) {
-            status = read_body(http_msg, iq);
-        }
-        else {
-            read_body(http_msg, iq);
-        }
+    if (status == HTTP_STATUS_OK) {
+        status = read_body(http_msg, iq);
+    }
+    else {
+        read_body(http_msg, iq);
     }
     if (status == HTTP_STATUS_OK) {
         status = host_field_matches_request_target(http_msg);

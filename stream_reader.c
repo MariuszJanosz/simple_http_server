@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <string.h>
 #include <errno.h>
+#include <inttypes.h>
 
 #include <unistd.h>
 
@@ -120,7 +121,7 @@ int stream_reader_thr(void* stream_reader_context) {
     thrd_exit(0);
 }
 
-int get_data(Input_queue_t* iq, char* output, int count) {
+int get_data(Input_queue_t* iq, char* output, intmax_t count) {
     if (mtx_lock(&iq->mtx) == thrd_error) {
         LOG(ERROR, "mtx_lock failed!");
         exit(1);
