@@ -1,7 +1,7 @@
 #ifndef HTTP_MESSAGE_H
 #define HTTP_MESSAGE_H
 
-#include "stream_reader.h"
+#include "reader.h"
 #include "tcp_connection.h"
 
 #include <stddef.h>
@@ -125,7 +125,7 @@ typedef struct Http_message_t {
 
 typedef void (*Chunker_func_t)(int fd, char* chunk, intmax_t* bytes_read, int* finished);
 
-#define DEFAULT_CHUNK_SIZE 128
+#define DEFAULT_CHUNK_SIZE 1024
 
 void init_http_message(Http_message_t* http_msg, Message_type_t type);
 Http_status_t parse_request_line(Http_message_t* http_msg, Input_queue_t* iq);
@@ -136,7 +136,6 @@ void write_response_status_line(Http_message_t* http_msg, char* http_version, ch
 void write_response_field_line(Http_message_t* http_msg, char* field_name, char* field_value);
 void write_response_body_content_length(Http_message_t* http_msg, char* body, intmax_t content_length);
 void send_response(Tcp_connection_t tcp_con, Http_message_t* http_msg);
-void send_response_sendfile(Tcp_connection_t tcp_con, Http_message_t* http_msg, int fd);
 void send_response_chunked(Tcp_connection_t tcp_con, Http_message_t* http_msg, int fd, Chunker_func_t chunker);
 void default_chunker(int fd, char* chunk, intmax_t* bytes_read, int* finished);
 

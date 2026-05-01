@@ -1,6 +1,6 @@
 #include "http_message.h"
 #include "log.h"
-#include "stream_reader.h"
+#include "reader.h"
 #include "uri.h"
 #include "tcp_connection.h"
 
@@ -9,6 +9,8 @@
 #include <ctype.h>
 #include <inttypes.h>
 #include <stddef.h>
+
+#include <unistd.h>
 
 void init_http_message(Http_message_t* http_msg, Message_type_t type) {
     http_msg->message_type = type;
@@ -767,13 +769,19 @@ void send_response(Tcp_connection_t tcp_con, Http_message_t* http_msg) {
         LOG(ERROR, "Faild to prepare message!");
         exit(1);
     }
-    fprintf(tcp_con.out_stream, "%.*s",
-                (int)count,
-                response);
-    fflush(tcp_con.out_stream);
+    int n = 0;
+    while (n < count) {
+        n += write(tcp_con.fd, response + n, (int)count - n);
+    }
+    free(response);
 }
 
-void send_response_sendfile(Tcp_connection_t tcp_con, Http_message_t* http_msg, int fd);
-void send_response_chunked(Tcp_connection_t tcp_con, Http_message_t* http_msg, int fd, Chunker_func_t chunker);
-void default_chunker(int fd, char* chunk, intmax_t* bytes_read, int* finished);
+void send_response_chunked(Tcp_connection_t tcp_con, Http_message_t* http_msg, int fd, Chunker_func_t chunker) {
+
+}
+
+void default_chunker(int fd, char* chunk, intmax_t* bytes_read, int* finished) {
+
+
+}
 

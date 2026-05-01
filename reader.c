@@ -8,7 +8,7 @@
 
 #include <unistd.h>
 
-#include "stream_reader.h"
+#include "reader.h"
 #include "log.h"
 
 void init_input_queue(Input_queue_t* iq) {
@@ -104,20 +104,15 @@ void read_chunk(int fd, Input_queue_t* iq) {
     }
 }
 
-int stream_reader_thr(void* stream_reader_context) {
-    Input_queue_t* input_queue = ((Stream_reader_context_t*)stream_reader_context)->input_queue;
-    FILE* stream = ((Stream_reader_context_t*)stream_reader_context)->stream;
-    int fd = fileno(stream);
-    if (fd == -1) {
-        LOG(ERROR, "fileno failed!");
-        exit(1);
-    }
+int reader_thr(void* reader_context) {
+    Input_queue_t* input_queue = ((Reader_context_t*)reader_context)->input_queue;
+    int fd = ((Reader_context_t*)reader_context)->input_fd;
 
     while (!input_queue->reached_eof) {
         read_chunk(fd, input_queue);
     }
     
-    free(stream_reader_context);
+    free(reader_context);
     thrd_exit(0);
 }
 
@@ -177,22 +172,22 @@ int is_reading_finished(Input_queue_t* iq) {
     return res;
 }
 
-Input_queue_t* init_stream_reader(FILE* stream) {
+Input_queue_t* init_reader(int fd) {
     Input_queue_t* res = malloc(sizeof(*res));
     if (!res) {
         LOG(ERROR, "malloc failed!");
         exit(1);
     }
     init_input_queue(res);
-    Stream_reader_context_t* src = malloc(sizeof(*src));
+    Reader_context_t* src = malloc(sizeof(*src));
     if (!src) {
         LOG(ERROR, "malloc failed!");
         exit(1);
     }
     src->input_queue = res;
-    src->stream = stream;
+    src->input_fd = fd;
     thrd_t thr;
-    thrd_create(&thr, stream_reader_thr, src);
+    thrd_create(&thr, reader_thr, src);
     thrd_detach(thr);
     return res;
 }

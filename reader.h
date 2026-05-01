@@ -1,5 +1,5 @@
-#ifndef STREAM_READER_H
-#define STREAM_READER_H
+#ifndef READER_H
+#define READER_H
 
 #include <stdio.h>
 #include <threads.h>
@@ -20,18 +20,18 @@ typedef struct Input_queue_t {
     cnd_t cnd_is_nonempty_or_eof;
 } Input_queue_t;
 
-typedef struct Stream_reader_context_t {
+typedef struct Reader_context_t {
     Input_queue_t* input_queue;
-    FILE* stream;
-} Stream_reader_context_t;
+    int input_fd;
+} Reader_context_t;
 
 void init_input_queue(Input_queue_t* iq);
 void free_input_queue(Input_queue_t* iq);
-int stream_reader_thr(void* reader_context);
+int reader_thr(void* reader_context);
 int get_data(Input_queue_t* iq, char* output, intmax_t count);
 int is_reading_finished(Input_queue_t* iq);
-Input_queue_t* init_stream_reader(FILE* stream); 
+Input_queue_t* init_reader(int fd); 
 char* input_queue_get_line(Input_queue_t* iq, int* new_line_found);
 
-#endif //STREAM_READER_H
+#endif //READER_H
 

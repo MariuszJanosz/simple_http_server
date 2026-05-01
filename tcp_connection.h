@@ -1,12 +1,10 @@
 #ifndef TCP_CONNECTION_H
 #define TCP_CONNECTION_H
 
-#include <stdio.h>
 #include <stdint.h>
 
 typedef struct Tcp_connection_t {
-    FILE* in_stream;
-    FILE* out_stream;
+    int fd;
 } Tcp_connection_t;
 
 int create_tcp_listener(uint32_t ip, uint16_t port);

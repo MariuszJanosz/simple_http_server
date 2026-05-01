@@ -8,7 +8,7 @@
 #include <unistd.h>
 
 #include "log.h"
-#include "stream_reader.h"
+#include "reader.h"
 #include "tcp_connection.h"
 #include "http_message.h"
 
@@ -41,7 +41,7 @@ int main() {
     }
     
     //Create in_stream reader
-    s.input_queue = init_stream_reader(s.tcp_connection.in_stream);
+    s.input_queue = init_reader(s.tcp_connection.fd);
     
     Http_message_t req;
     init_http_message(&req, HTTP_REQUEST);
