@@ -4,7 +4,7 @@
 #include <assert.h>
 #include <string.h>
 #include <errno.h>
-#include <inttypes.h>
+#include <stddef.h>
 
 #include <unistd.h>
 
@@ -116,7 +116,7 @@ int reader_thr(void* reader_context) {
     thrd_exit(0);
 }
 
-int get_data(Input_queue_t* iq, char* output, intmax_t count) {
+int get_data(Input_queue_t* iq, char* output, size_t count) {
     if (mtx_lock(&iq->mtx) == thrd_error) {
         LOG(ERROR, "mtx_lock failed!");
         exit(1);

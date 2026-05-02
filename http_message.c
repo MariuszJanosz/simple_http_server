@@ -2,6 +2,7 @@
 #include "log.h"
 #include "reader.h"
 #include "uri.h"
+#include "abnf.h"
 #include "tcp_connection.h"
 
 #include <string.h>
@@ -10,6 +11,7 @@
 #include <inttypes.h>
 #include <stddef.h>
 
+#include <sys/types.h>
 #include <unistd.h>
 
 void init_http_message(Http_message_t* http_msg, Message_type_t type) {
@@ -84,8 +86,7 @@ int is_valid_absolute_form(const char* str) {
 int is_valid_origin_form(const char* str) {
     /*origin-form = 1*( "/" segment ) [ "?" query ]*/
     int i = 0;
-    int len;
-    len = strlen(str);
+    size_t len = strlen(str);
     while (i < len) {
         if (0x3F == str[i] /*?*/) {
             break;
@@ -102,8 +103,7 @@ int is_valid_origin_form(const char* str) {
 
 int is_valid_authority_form(const char* str) {
     int i = 0;
-    int len = 0;
-    len = strlen(str);
+    size_t len = strlen(str);
     if (str[i] == '[') {
         while (str[i] != '\0' && str[i] != ']') {
             ++i;
@@ -158,8 +158,8 @@ char* get_line(Input_queue_t* iq) {
     char* line = input_queue_get_line(iq, &new_line_found);
     while (!new_line_found) {
         char* tmp = input_queue_get_line(iq, &new_line_found);
-        int line_len = strlen(line);
-        int tmp_len = strlen(tmp);
+        size_t line_len = strlen(line);
+        size_t tmp_len = strlen(tmp);
         char* tmpp = realloc(line, (line_len + tmp_len + 1) * sizeof(*line));
         if (!tmpp) {
             LOG(ERROR, "realloc failed!");
@@ -209,7 +209,7 @@ again:
         free(rl.request_target);
         return HTTP_STATUS_BAD_REQUEST;
     }
-    int l = strlen(http_version);
+    size_t l = strlen(http_version);
     if (l > 0 && http_version[l - 1] == '\r') {
         http_version[l - 1] = '\0';
     }
@@ -260,7 +260,7 @@ Http_status_t parse_field_line(Http_message_t* http_msg, Input_queue_t* iq, int 
         free(fl.field_name);
         return HTTP_STATUS_BAD_REQUEST;
     }
-    int l = strlen(value);
+    size_t l = strlen(value);
     char* tmp = value;
     while (l > 0 && (tmp[l - 1] == '\r' || tmp[l - 1] == ' ')) {
         l -= 1;
@@ -293,16 +293,16 @@ Http_status_t parse_field_line(Http_message_t* http_msg, Input_queue_t* iq, int 
     return HTTP_STATUS_OK;
 }
 
-Http_status_t read_body_cl(Http_message_t* http_msg, Input_queue_t* iq, intmax_t content_length) {
+Http_status_t read_body_cl(Http_message_t* http_msg, Input_queue_t* iq, size_t content_length) {
     unsigned char* body_data = malloc(content_length * sizeof(*body_data));
     if (!body_data) {
         LOG(ERROR, "malloc failed!");
         exit(1);
     }
-    intmax_t read = 0;
+    size_t read = 0;
     while (read < content_length) {
         unsigned char* first_empty = body_data + read;
-        intmax_t to_read = content_length - read;
+        size_t to_read = content_length - read;
         read += get_data(iq, first_empty, to_read);
     }
     http_msg->message_body = body_data;
@@ -321,14 +321,18 @@ Http_status_t read_body_chunked(Http_message_t* http_msg, Input_queue_t* iq) {
     int finished = 0;
     while (!finished) {
         char* size = get_line(iq);
-        int len = strlen(size);
+        size_t len = strlen(size);
         size[--len] = '\0'; // '\n'->'\0'
         if (size[len - 1] == '\r') {
             size[--len] = '\0'; // '\r'->'\0'
         }
+        if (!abnf_is_HEXDIG(size[0])) {
+            free(size);
+            return HTTP_STATUS_BAD_REQUEST;
+        }
         char *end;
-        intmax_t content_length = strtoimax(size, &end, 16);
-        if (*end != '\0' || content_length < 0) {
+        uintmax_t content_length = strtoumax(size, &end, 16);
+        if (*end != '\0') {
             free(size);
             return HTTP_STATUS_BAD_REQUEST;
         }
@@ -342,7 +346,9 @@ Http_status_t read_body_chunked(Http_message_t* http_msg, Input_queue_t* iq) {
         else {
             Http_message_t fake_tmp;
             fake_tmp.message_body = NULL;
-            read_body_cl(&fake_tmp, iq, content_length);
+            //If we are here 0 < content_length < MAX_BODY_SIZE
+            //we can safely cast to size_t
+            read_body_cl(&fake_tmp, iq, (size_t)content_length);
             if (content_length > (data_capacity - data_first_free_index)) {
                 while (content_length > (data_capacity - data_first_free_index)) {
                     data_capacity *= 2;
@@ -366,27 +372,33 @@ Http_status_t read_body_chunked(Http_message_t* http_msg, Input_queue_t* iq) {
     return HTTP_STATUS_OK;
 }
 
-//For now it works only for requests like Transfer-Encoding: chunked but not for Transfer-Encoding:chunked,gzip
+//For now it works only for requests like Transfer-Encoding: chunked but not for Transfer-Encoding:gzip,chunked
 Http_status_t read_body(Http_message_t* http_msg, Input_queue_t* iq) {
-    int transfer_encoding_index;
+    int transfer_encoding_index = -1;
     if (has_field(http_msg, "Transfer-Encoding", &transfer_encoding_index)) {
-        char* transfer_encoding_val = http_msg->field_lines[transfer_encoding_index].field_value;
+        char* transfer_encoding_val =
+                    http_msg->field_lines[transfer_encoding_index].field_value;
         if (strcmp(transfer_encoding_val, "chunked") == 0) {
             return read_body_chunked(http_msg, iq);
         }
     }
-    int content_length_index;
+    int content_length_index = -1;
     if (has_field(http_msg, "Content-Length", &content_length_index)) {
         char* str = http_msg->field_lines[content_length_index].field_value;
+        if (!abnf_is_DIGIT(str[0])) {
+            return HTTP_STATUS_BAD_REQUEST;
+        }
         char* end;
-        intmax_t content_length = strtoimax(str, &end, 10);
-        if (*end != '\0' || content_length < 0) {
+        uintmax_t content_length = strtoumax(str, &end, 10);
+        if (*end != '\0') {
             return HTTP_STATUS_BAD_REQUEST;
         }
         if (content_length > MAX_BODY_SIZE) {
             return HTTP_STATUS_PAYLOAD_TOO_LARGE;
         }
-        return read_body_cl(http_msg, iq, content_length);
+        //If we are here 0 <= content_length <= MAX_BODY_SIZE
+        //we can safely cast to size_t
+        return read_body_cl(http_msg, iq, (size_t)content_length);
     }
     return HTTP_STATUS_OK; //There is no body
 }
@@ -716,13 +728,13 @@ void write_response_field_line(Http_message_t* http_msg, char* field_name, char*
     http_msg->field_lines_count += 1;
 }
 
-void write_response_body_content_length(Http_message_t* http_msg, char* body, intmax_t content_length) {
+void write_response_body_content_length(Http_message_t* http_msg, char* body, size_t content_length) {
     http_msg->message_body = body;
-    http_msg->body_size = (size_t)content_length;
+    http_msg->body_size = content_length;
 }
 
-intmax_t get_response_size(Http_message_t* http_msg) {
-    intmax_t msg_size = 0;
+size_t get_response_size(Http_message_t* http_msg) {
+    size_t msg_size = 0;
     msg_size += strlen(((Status_line_t*)(http_msg->start_line))->http_version);
     msg_size += 1;//" "
     msg_size += strlen(((Status_line_t*)(http_msg->start_line))->status_code);
@@ -742,13 +754,13 @@ intmax_t get_response_size(Http_message_t* http_msg) {
 }
 
 void send_response(Tcp_connection_t tcp_con, Http_message_t* http_msg) {
-    intmax_t msg_size = get_response_size(http_msg);
+    size_t msg_size = get_response_size(http_msg);
     char* response = malloc(msg_size * sizeof(*response));
     if (!response) {
         LOG(ERROR, "malloc failed!");
         exit(1);
     }
-    intmax_t count = 0;
+    size_t count = 0;
     //Prepare status line
     count += sprintf(response + count, "%s %s %s\r\n",
                 ((Status_line_t*)(http_msg->start_line))->http_version,
@@ -762,16 +774,21 @@ void send_response(Tcp_connection_t tcp_con, Http_message_t* http_msg) {
     }
     //CRLF
     count += sprintf(response + count, "\r\n");
-    count += sprintf(response + count, "%.*s",
-                (int)http_msg->body_size,
-                http_msg->message_body);
+    //Body
+    memcpy(response + count, http_msg->message_body, http_msg->body_size);
+    count += http_msg->body_size;
     if (count < msg_size) {
         LOG(ERROR, "Faild to prepare message!");
         exit(1);
     }
-    int n = 0;
+    size_t n = 0;
     while (n < count) {
-        n += write(tcp_con.fd, response + n, (int)count - n);
+        ssize_t tmp = write(tcp_con.fd, response + n, count - n);
+        if (tmp < 0) {
+           LOG(ERROR, "write failed!");
+           exit(1);
+        }
+        n += tmp;
     }
     free(response);
 }
@@ -780,8 +797,7 @@ void send_response_chunked(Tcp_connection_t tcp_con, Http_message_t* http_msg, i
 
 }
 
-void default_chunker(int fd, char* chunk, intmax_t* bytes_read, int* finished) {
-
+void default_chunker(int fd, char* chunk, size_t* bytes_read, int* finished) {
 
 }
 

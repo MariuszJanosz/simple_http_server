@@ -4,6 +4,7 @@
 #include <threads.h>
 #include <signal.h>
 #include <stdint.h>
+#include <limits.h>
 
 #include <unistd.h>
 
@@ -33,7 +34,12 @@ void echo_request(Http_message_t* req) {
     }
     printf("\n");
     if (req->message_body) {
-        printf("%.*s\n", (int)req->body_size, req->message_body);
+        if (req->body_size <= INT_MAX) {
+            printf("%.*s\n", (int)req->body_size, req->message_body);
+        }
+        else {
+            LOG(INFO, "Body too big, printf skipped!");
+        }
         printf("\n");
     }
 }
@@ -81,9 +87,10 @@ int main() {
                             status_char, (char*)http_status_to_string(status));
                     char* body = "<h1>Hello</h1>";
                     char size[1024];
-                    sprintf(size, "%d", (int)strlen(body));
+                    size_t body_len = strlen(body);
+                    sprintf(size, "%zu", body_len);
                     write_response_field_line(&res, "Content-length", size);
-                    write_response_body_content_length(&res, body, (intmax_t)strlen(body));
+                    write_response_body_content_length(&res, body, body_len);
                     send_response(s.tcp_connection, &res);
                 }
                 break;
@@ -93,9 +100,10 @@ int main() {
                             status_char, (char*)http_status_to_string(status));
                     char* body = "<h1>default</h1>";
                     char size[1024];
-                    sprintf(size, "%d", (int)strlen(body));
+                    size_t body_len = strlen(body);
+                    sprintf(size, "%zu", body_len);
                     write_response_field_line(&res, "Content-length", size);
-                    write_response_body_content_length(&res, body, (intmax_t)strlen(body));
+                    write_response_body_content_length(&res, body, body_len);
                     send_response(s.tcp_connection, &res);
                 }
                 break;

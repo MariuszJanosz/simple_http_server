@@ -5,7 +5,6 @@
 #include "tcp_connection.h"
 
 #include <stddef.h>
-#include <inttypes.h>
 
 #define MAX_BODY_SIZE (100 * 1024 * 1024) //100MB
 
@@ -123,7 +122,7 @@ typedef struct Http_message_t {
     size_t body_size;
 } Http_message_t;
 
-typedef void (*Chunker_func_t)(int fd, char* chunk, intmax_t* bytes_read, int* finished);
+typedef void (*Chunker_func_t)(int fd, char* chunk, size_t* bytes_read, int* finished);
 
 #define DEFAULT_CHUNK_SIZE 1024
 
@@ -134,10 +133,10 @@ Http_status_t read_body(Http_message_t* http_msg, Input_queue_t* iq);
 Http_status_t parse_http_request(Http_message_t* http_msg, Input_queue_t* iq);
 void write_response_status_line(Http_message_t* http_msg, char* http_version, char* status, char* reason);
 void write_response_field_line(Http_message_t* http_msg, char* field_name, char* field_value);
-void write_response_body_content_length(Http_message_t* http_msg, char* body, intmax_t content_length);
+void write_response_body_content_length(Http_message_t* http_msg, char* body, size_t content_length);
 void send_response(Tcp_connection_t tcp_con, Http_message_t* http_msg);
 void send_response_chunked(Tcp_connection_t tcp_con, Http_message_t* http_msg, int fd, Chunker_func_t chunker);
-void default_chunker(int fd, char* chunk, intmax_t* bytes_read, int* finished);
+void default_chunker(int fd, char* chunk, size_t* bytes_read, int* finished);
 
 const char* http_method_to_string(Method_t method);
 const char* http_status_to_string(Http_status_t status);
