@@ -29,6 +29,16 @@ void init_http_message(Http_message_t* http_msg, Message_type_t type) {
     http_msg->body_size = 0;
 }
 
+void free_http_message(Http_message_t* http_msg) {
+    if (http_msg->start_line) {
+        free(http_msg->start_line);
+    }
+    free(http_msg->field_lines);
+    if (http_msg->message_body) {
+        free(http_msg->message_body);
+    }
+}
+
 const char* http_method_to_string(Method_t method) {
     switch (method) {
         case HTTP_GET:

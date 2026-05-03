@@ -13,7 +13,8 @@ target_sources(simple_http_server PRIVATE	simple_http_server.c
 						tcp_connection.c	tcp_connection.h
 						http_message.c		http_message.h
 						abnf.c			abnf.h
-						uri.c			uri.h)
+						uri.c			uri.h
+						http_routing.c		http_routing.h)
 
 install(TARGETS simple_http_server RUNTIME)
 
