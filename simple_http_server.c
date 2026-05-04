@@ -24,8 +24,9 @@ typedef struct Http_server_t {
 } Http_server_t;
 
 void echo_request(Http_message_t* req) {
+    static int req_id = 0;
     Request_line_t* req_line = (Request_line_t*)req->start_line;
-    printf("---req---echo---\n");
+    printf("---req---echo---id:%05d---\n", req_id++);
     printf("%s %s %s\n",
         http_method_to_string(req_line->method),
         req_line->request_target,
@@ -43,6 +44,50 @@ void echo_request(Http_message_t* req) {
         }
         printf("\n");
     }
+}
+
+void echo_response(Http_message_t* res) {
+    static int res_id = 0;
+    Status_line_t* status_line = (Status_line_t*)res->start_line;
+    printf("---res---echo---id:%05d---\n", res_id++);
+    printf("%s %s %s\n",
+        status_line->http_version,
+        status_line->status_code,
+        status_line->status_text);
+    for (int i = 0; i < res->field_lines_count; ++i) {
+        printf("%s: %s\n", res->field_lines[i].field_name, res->field_lines[i].field_value);
+    }
+    printf("\n");
+    if (res->message_body) {
+        if (res->body_size <= INT_MAX) {
+            printf("%.*s\n", (int)res->body_size, res->message_body);
+        }
+        else {
+            LOG(INFO, "Body too big, printf skipped!");
+        }
+        printf("\n");
+    }
+}
+
+long get_file_size(FILE* f) {
+    long curr = ftell(f);
+    if (curr < 0) {
+        LOG(ERROR, "ftell failed!");
+    }
+    if (fseek(f, 0, SEEK_END)) {
+        LOG(ERROR, "fseek failed!");
+        exit(1);
+    }
+    long res = ftell(f);
+    if (res < 0) {
+        LOG(ERROR, "ftell failed!");
+        exit(1);
+    }
+    if (fseek(f, curr, SEEK_SET)) {
+        LOG(ERROR, "fseek failed!");
+        exit(1);
+    }
+    return res;
 }
 
 int main(int argc, char** argv) {
@@ -103,18 +148,7 @@ int main(int argc, char** argv) {
                         LOG(ERROR, "fopen failed!");
                         exit(1);
                     }
-                    if (fseek(f, 0, SEEK_END)) {
-                        LOG(ERROR, "fseek failed!");
-                        exit(1);
-                    }
-                    long fs = ftell(f);
-                    if (fs < 0) {
-                        LOG(ERROR, "ftell failed!");
-                    }
-                    if (fseek(f, 0, SEEK_SET)) {
-                        LOG(ERROR, "fseek failed!");
-                        exit(1);
-                    }
+                    long fs = get_file_size(f);
                     if (fs == 0) {
                         fclose(f);
                         break;
@@ -150,6 +184,8 @@ int main(int argc, char** argv) {
 
         //Send response
         send_response(s.tcp_connection, &res);
+
+        echo_response(&res);
 
         //Cleanup
         free_http_message(&req);

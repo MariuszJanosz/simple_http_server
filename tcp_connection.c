@@ -18,6 +18,11 @@ int create_tcp_listener(uint32_t ip, uint16_t port) {
         LOG(ERROR, "socket failed!");
         exit(1);
     }
+    int a = 1;
+    if (setsockopt(list_sock_fd, SOL_SOCKET, SO_REUSEADDR, &a, sizeof(a)) != 0) {
+        LOG(ERROR, "setsockopt failed!");
+        exit(1);
+    }
     struct sockaddr_in list_sock_addr;
     memset(&list_sock_addr, 0, sizeof(list_sock_addr));
     list_sock_addr.sin_family = AF_INET;

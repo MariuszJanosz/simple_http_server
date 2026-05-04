@@ -31,7 +31,20 @@ void init_http_message(Http_message_t* http_msg, Message_type_t type) {
 
 void free_http_message(Http_message_t* http_msg) {
     if (http_msg->start_line) {
+        if (http_msg->message_type == HTTP_REQUEST) {
+            Request_line_t* rl = http_msg->start_line;
+            if (rl->request_target) {
+                free(rl->request_target);
+            }
+            if (rl->http_version) {
+                free(rl->http_version);
+            }
+        }
         free(http_msg->start_line);
+    }
+    for (int i = 0; i < http_msg->field_lines_count; ++i) {
+        free(http_msg->field_lines[i].field_name);
+        free(http_msg->field_lines[i].field_value);
     }
     free(http_msg->field_lines);
     if (http_msg->message_body) {
@@ -253,6 +266,7 @@ Http_status_t parse_field_line(Http_message_t* http_msg, Input_queue_t* iq, int 
         if ((input[0] == '\r' && input[1] == '\n') || input[0] == '\n') {
             *is_empty = 1;
         }
+        free(input);
         return HTTP_STATUS_OK;
     }
     char* name = strtok(input, ":");
@@ -711,16 +725,14 @@ const char* http_status_to_string(Http_status_t status) {
 }
 
 void write_response_status_line(Http_message_t* http_msg, char* http_version, char* status, char* reason) {
-    Status_line_t sl;
-    sl.http_version = http_version;
-    sl.status_code = status;
-    sl.status_text = reason;
-    http_msg->start_line = malloc(sizeof(sl));
+    http_msg->start_line = malloc(sizeof(Status_line_t));
     if (!(http_msg->start_line)) {
         LOG(ERROR, "malloc failed!");
         exit(1);
     }
-    memcpy(http_msg->start_line, &sl, sizeof(sl));
+    ((Status_line_t*)(http_msg->start_line))->http_version = http_version;
+    ((Status_line_t*)(http_msg->start_line))->status_code = status;
+    ((Status_line_t*)(http_msg->start_line))->status_text = reason;
 }
 
 void write_response_field_line(Http_message_t* http_msg, char* field_name, char* field_value) {
@@ -733,8 +745,8 @@ void write_response_field_line(Http_message_t* http_msg, char* field_name, char*
         }
         http_msg->field_lines = tmp;
     }
-    http_msg->field_lines[http_msg->field_lines_count].field_name = field_name;
-    http_msg->field_lines[http_msg->field_lines_count].field_value = field_value;
+    http_msg->field_lines[http_msg->field_lines_count].field_name = strdup(field_name);
+    http_msg->field_lines[http_msg->field_lines_count].field_value = strdup(field_value);
     http_msg->field_lines_count += 1;
 }
 
@@ -761,10 +773,14 @@ size_t get_response_size(Http_message_t* http_msg) {
     if (http_msg->body_size) {
         msg_size += http_msg->body_size;
     }
+    return msg_size;
 }
 
 void send_response(Tcp_connection_t tcp_con, Http_message_t* http_msg) {
     size_t msg_size = get_response_size(http_msg);
+    if (msg_size == 0) {
+        return;
+    }
     char* response = malloc(msg_size * sizeof(*response));
     if (!response) {
         LOG(ERROR, "malloc failed!");
