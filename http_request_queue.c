@@ -9,6 +9,9 @@
 #include <stdio.h>
 #include <limits.h>
 
+extern int workers_finished;
+extern cnd_t cnd_worker_finished;
+
 void echo_request(Http_message_t* req) {
     static int req_id = 0;
     Request_line_t* req_line = (Request_line_t*)req->start_line;
@@ -224,8 +227,16 @@ int response_writer_thr(void* response_writer_context) {
         cnd_signal(&rq->queue[curr_index].cnd_is_front);
         mtx_unlock(&rq->mtx);
     }
-    
+
+    //Cleanup
     free(response_writer_context);
+    if (mtx_lock(&rq->mtx) == thrd_error) {
+        LOG(ERROR, "mtx_lock failed!");
+        exit(1);
+    }
+    workers_finished += 1;
+    cnd_signal(&cnd_worker_finished);
+    mtx_unlock(&rq->mtx);
     thrd_exit(0);
 }
 
@@ -261,6 +272,10 @@ void request_queue_manager(Request_queue_t* rq, Input_queue_t* iq) {
         Http_status_t status = parse_http_request(req, iq);
         echo_request(req);
 
+        //TODO for certain statuses immediately break the loop
+        //also make an error or EOF in parse_http_request return one of these statuses
+        //instead of nuking entire process
+
         //Get rq->mtx and put request to rq
         if (mtx_lock(&rq->mtx) == thrd_error) {
             LOG(ERROR, "mtx_lock failed!");
@@ -283,5 +298,7 @@ void request_queue_manager(Request_queue_t* rq, Input_queue_t* iq) {
         cnd_signal(&rrp->cnd_request_ready);
         mtx_unlock(&rq->mtx);
     }
+
+    //TODO here add logic forcing closing of writers
 }
 
