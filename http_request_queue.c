@@ -220,7 +220,7 @@ int response_writer_thr(void* response_writer_context) {
         //Send response
         send_response(tcp_con, &res);
 
-        echo_response(&res);
+        DEBUG(echo_response(&res));
 
         //Cleanup
         if (mtx_lock(&rq->mtx) == thrd_error) {
@@ -291,7 +291,8 @@ void request_queue_manager(Request_queue_t* rq, Input_queue_t* iq) {
         }
         init_http_message(req, HTTP_REQUEST);
         Http_status_t status = parse_http_request(req, iq);
-        echo_request(req);
+        
+        DEBUG(echo_request(req));
 
         //TODO for certain statuses immediately break the loop
         //also make an error or EOF in parse_http_request return one of these statuses
