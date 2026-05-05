@@ -77,8 +77,8 @@ int transfer(char* b, int cnt, Input_queue_t* i) {
     return cnt;
 }
 
-void read_chunk(int fd, Input_queue_t* iq) {
-#define CHUNK_SIZE 4 * 1024
+int read_chunk(int fd, Input_queue_t* iq) {
+#define CHUNK_SIZE (4 * 1024)
     char buff[CHUNK_SIZE];
     int cnt = read(fd, buff, CHUNK_SIZE);
     if (cnt == -1) {
@@ -90,6 +90,7 @@ void read_chunk(int fd, Input_queue_t* iq) {
         iq->reached_eof = 1;
         cnd_signal(&iq->cnd_is_nonempty_or_eof);
         mtx_unlock(&iq->mtx);
+        return 0;
     }
     else {
         char* ptr = buff;
@@ -99,14 +100,17 @@ void read_chunk(int fd, Input_queue_t* iq) {
             ptr += tmp;
         }
     }
+    return 1;
 }
 
 int reader_thr(void* reader_context) {
     Input_queue_t* input_queue = ((Reader_context_t*)reader_context)->input_queue;
     int fd = ((Reader_context_t*)reader_context)->input_fd;
 
-    while (!input_queue->reached_eof) {
-        read_chunk(fd, input_queue);
+    while (1) {
+        if (!read_chunk(fd, input_queue)) {
+            break;
+        }
     }
     
     free(reader_context);
@@ -120,6 +124,7 @@ int get_data(Input_queue_t* iq, char* output, size_t count) {
     }
     while (!iq->is_nonempty) {
         if (iq->reached_eof) {
+            mtx_unlock(&iq->mtx);
             return 0;
         }
         cnd_wait(&iq->cnd_is_nonempty_or_eof, &iq->mtx);
@@ -196,8 +201,8 @@ char* input_queue_get_line(Input_queue_t* iq, int* new_line_found) {
     }
     while (!iq->is_nonempty) {
         if (iq->reached_eof) {
-            LOG(ERROR, "unexpected EOF!");
-            exit(1);
+            mtx_unlock(&iq->mtx);
+            return NULL;
         }
         cnd_wait(&iq->cnd_is_nonempty_or_eof, &iq->mtx);
     }

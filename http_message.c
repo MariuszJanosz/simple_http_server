@@ -176,8 +176,14 @@ Http_status_t is_valid_http_version(char* str) {
 char* get_line(Input_queue_t* iq) {
     int new_line_found = 0;
     char* line = input_queue_get_line(iq, &new_line_found);
+    if (!line) {
+        return NULL;
+    }
     while (!new_line_found) {
         char* tmp = input_queue_get_line(iq, &new_line_found);
+        if (!tmp) {
+            return line;
+        }
         size_t line_len = strlen(line);
         size_t tmp_len = strlen(tmp);
         char* tmpp = realloc(line, (line_len + tmp_len + 1) * sizeof(*line));
@@ -194,6 +200,9 @@ char* get_line(Input_queue_t* iq) {
 Http_status_t parse_request_line(Http_message_t* http_msg, Input_queue_t* iq) {
 again:
     char* input = get_line(iq);
+    if (!input) {
+        return HTTP_STATUS_BAD_REQUEST;
+    }
     //RFC9112 2.2 empty line before request-line should be ignored
     if (strcmp(input, "\r\n") == 0 || strcmp(input, "\n") == 0) {
         free(input);
@@ -258,6 +267,10 @@ Http_status_t is_valid_field_value(char* value) {
 
 Http_status_t parse_field_line(Http_message_t* http_msg, Input_queue_t* iq, int *is_empty) {
     char* input = get_line(iq);
+    if (!input) {
+        *is_empty = 1;
+        return HTTP_STATUS_BAD_REQUEST;
+    }
     // RFC9112 2.2 field lines starting with a white space shall be ignored
     if (isspace(input[0])) {
         if ((input[0] == '\r' && input[1] == '\n') || input[0] == '\n') {
@@ -342,23 +355,37 @@ Http_status_t read_body_chunked(Http_message_t* http_msg, Input_queue_t* iq) {
     int finished = 0;
     while (!finished) {
         char* size = get_line(iq);
+        if (!size) {
+            free(body_data);
+            return HTTP_STATUS_BAD_REQUEST;
+        }
         size_t len = strlen(size);
-        size[--len] = '\0'; // '\n'->'\0'
+        if (size[len - 1] == '\n') {
+            size[--len] = '\0'; // '\n'->'\0'
+        }
+        else {
+            free(size);
+            free(body_data);
+            return HTTP_STATUS_BAD_REQUEST;
+        }
         if (size[len - 1] == '\r') {
             size[--len] = '\0'; // '\r'->'\0'
         }
         if (!abnf_is_HEXDIG(size[0])) {
             free(size);
+            free(body_data);
             return HTTP_STATUS_BAD_REQUEST;
         }
         char *end;
         uintmax_t content_length = strtoumax(size, &end, 16);
         if (*end != '\0') {
             free(size);
+            free(body_data);
             return HTTP_STATUS_BAD_REQUEST;
         }
         else if (content_length > MAX_BODY_SIZE) {
             free(size);
+            free(body_data);
             return HTTP_STATUS_PAYLOAD_TOO_LARGE;
         }
         else if (content_length == 0) {
@@ -386,7 +413,12 @@ Http_status_t read_body_chunked(Http_message_t* http_msg, Input_queue_t* iq) {
             free(fake_tmp.message_body);
         }
         free(size);
-        free(get_line(iq)); //Flush remaining \r\n
+        char* tmp = get_line(iq);
+        if (!tmp) {
+            free(body_data);
+            return HTTP_STATUS_BAD_REQUEST;
+        }
+        free(tmp); //Flush remaining \r\n
     }
     http_msg->message_body = body_data;
     http_msg->body_size = data_first_free_index;
@@ -798,8 +830,10 @@ void send_response(Tcp_connection_t tcp_con, Http_message_t* http_msg) {
     //CRLF
     count += sprintf(response + count, "\r\n");
     //Body
-    memcpy(response + count, http_msg->message_body, http_msg->body_size);
-    count += http_msg->body_size;
+    if (http_msg->body_size) {
+        memcpy(response + count, http_msg->message_body, http_msg->body_size);
+        count += http_msg->body_size;
+    }
     if (count < msg_size) {
         LOG(ERROR, "Faild to prepare message!");
         exit(1);
