@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <limits.h>
+#include <signal.h>
 
 extern int workers_finished;
 extern cnd_t cnd_worker_finished;
@@ -127,6 +128,9 @@ void free_request_queue(Request_queue_t* rq) {
 }
 
 int response_writer_thr(void* response_writer_context) {
+    //Ignore signal if the other side closes connection
+    signal(SIGPIPE, SIG_IGN);
+
     Request_queue_t* rq = ((Response_writer_context_t*)(response_writer_context))->rq;
     int number_of_workers = ((Response_writer_context_t*)(response_writer_context))->number_of_workers;
     int curr_index = ((Response_writer_context_t*)(response_writer_context))->start_index;
@@ -144,8 +148,7 @@ int response_writer_thr(void* response_writer_context) {
             cnd_wait(&rrp->cnd_request_ready, &rq->mtx);
             if (    request_queue_manager_finished &&
                     !rq->queue[curr_index].request_ready) {
-                mtx_unlock(&rq->mtx);
-                break;
+                goto cleanup;
             }
         }
         mtx_unlock(&rq->mtx);
@@ -213,7 +216,7 @@ int response_writer_thr(void* response_writer_context) {
             cnd_wait(&rrp->cnd_is_front, &rq->mtx);
         }
         mtx_unlock(&rq->mtx);
-        
+
         //Send response
         send_response(tcp_con, &res);
 
@@ -224,9 +227,13 @@ int response_writer_thr(void* response_writer_context) {
             LOG(ERROR, "mtx_lock failed!");
             exit(1);
         }
-        free_http_message(rrp->req);
-        free(rrp->req);
-        free_http_message(rrp->res);
+        if (rrp->req) {
+            free_http_message(rrp->req);
+            free(rrp->req);
+        }
+        if (rrp->res) {
+            free_http_message(rrp->res);
+        }
         if (rq->front == rq->rear) {
             rq->is_empty = 1;
             rq->rear += 1;
@@ -241,18 +248,14 @@ int response_writer_thr(void* response_writer_context) {
         cnd_signal(&rq->cnd_is_nonfull);
         if (    request_queue_manager_finished &&
                 !rq->queue[curr_index].request_ready) {
-            mtx_unlock(&rq->mtx);
-            break;
+            goto cleanup;
         }
         mtx_unlock(&rq->mtx);
     }
 
     //Cleanup
+cleanup:
     free(response_writer_context);
-    if (mtx_lock(&rq->mtx) == thrd_error) {
-        LOG(ERROR, "mtx_lock failed!");
-        exit(1);
-    }
     workers_finished += 1;
     cnd_signal(&cnd_worker_finished);
     mtx_unlock(&rq->mtx);
@@ -316,10 +319,14 @@ void request_queue_manager(Request_queue_t* rq, Input_queue_t* iq) {
         cnd_signal(&rrp->cnd_request_ready);
         mtx_unlock(&rq->mtx);
     }
-    //TODO here add logic forcing closing of writers
+    if (mtx_lock(&rq->mtx) == thrd_error) {
+        LOG(ERROR, "mtx_lock failed!");
+        exit(1);
+    }
     request_queue_manager_finished = 1;
     for (int i = 0; i < REQUEST_QUEUE_CAPACITY; ++i) {
         cnd_signal(&rq->queue[i].cnd_request_ready);
     }
+    mtx_unlock(&rq->mtx);
 }
 

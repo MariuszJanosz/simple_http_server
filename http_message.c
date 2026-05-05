@@ -842,8 +842,8 @@ void send_response(Tcp_connection_t tcp_con, Http_message_t* http_msg) {
     while (n < count) {
         ssize_t tmp = write(tcp_con.fd, response + n, count - n);
         if (tmp < 0) {
-           LOG(ERROR, "write failed!");
-           exit(1);
+           LOG(INFO, "write failed!");
+           break;
         }
         n += tmp;
     }
