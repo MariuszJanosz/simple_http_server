@@ -3,6 +3,7 @@
 #include "http_routing.h"
 #include "tcp_connection.h"
 #include "http_message.h"
+#include "reader.h"
 
 #include <threads.h>
 #include <stdlib.h>
@@ -11,11 +12,17 @@
 
 extern int workers_finished;
 extern cnd_t cnd_worker_finished;
+int request_queue_manager_finished = 0;
 
 void echo_request(Http_message_t* req) {
     static int req_id = 0;
     Request_line_t* req_line = (Request_line_t*)req->start_line;
     printf("---req---echo---id:%05d---\n", req_id++);
+    if (!req_line) {
+        printf("Missing reqest line!\n\n");
+        fflush(stdout);
+        return;
+    }
     printf("%s %s %s\n",
         http_method_to_string(req_line->method),
         req_line->request_target,
@@ -33,6 +40,7 @@ void echo_request(Http_message_t* req) {
         }
         printf("\n");
     }
+    fflush(stdout);
 }
 
 void echo_response(Http_message_t* res) {
@@ -56,6 +64,7 @@ void echo_response(Http_message_t* res) {
         }
         printf("\n");
     }
+    fflush(stdout);
 }
 
 long get_file_size(FILE* f) {
@@ -133,6 +142,11 @@ int response_writer_thr(void* response_writer_context) {
         Request_response_pair_t* rrp = &rq->queue[curr_index];
         while (!rrp->request_ready) {
             cnd_wait(&rrp->cnd_request_ready, &rq->mtx);
+            if (    request_queue_manager_finished &&
+                    !rq->queue[curr_index].request_ready) {
+                mtx_unlock(&rq->mtx);
+                break;
+            }
         }
         mtx_unlock(&rq->mtx);
         rrp->request_ready = 0;
@@ -221,10 +235,15 @@ int response_writer_thr(void* response_writer_context) {
         rq->front += 1;
         rq->front %= REQUEST_QUEUE_CAPACITY;
         rq->is_nonfull = 1;
-        cnd_signal(&rq->cnd_is_nonfull);
         curr_index += number_of_workers;
         curr_index %= REQUEST_QUEUE_CAPACITY;
-        cnd_signal(&rq->queue[curr_index].cnd_is_front);
+        cnd_signal(&rq->queue[rq->front].cnd_is_front);
+        cnd_signal(&rq->cnd_is_nonfull);
+        if (    request_queue_manager_finished &&
+                !rq->queue[curr_index].request_ready) {
+            mtx_unlock(&rq->mtx);
+            break;
+        }
         mtx_unlock(&rq->mtx);
     }
 
@@ -259,9 +278,8 @@ void init_writers(Request_queue_t* rq, int number_of_workers, Tcp_connection_t t
     }
 }
 
-
 void request_queue_manager(Request_queue_t* rq, Input_queue_t* iq) {
-    while (1) {
+    while (!is_reading_finished(iq)) {
         //prepare next request
         Http_message_t* req = malloc(sizeof(*req));
         if (!req) {
@@ -298,7 +316,10 @@ void request_queue_manager(Request_queue_t* rq, Input_queue_t* iq) {
         cnd_signal(&rrp->cnd_request_ready);
         mtx_unlock(&rq->mtx);
     }
-
     //TODO here add logic forcing closing of writers
+    request_queue_manager_finished = 1;
+    for (int i = 0; i < REQUEST_QUEUE_CAPACITY; ++i) {
+        cnd_signal(&rq->queue[i].cnd_request_ready);
+    }
 }
 
