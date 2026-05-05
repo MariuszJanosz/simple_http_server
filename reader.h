@@ -1,7 +1,6 @@
 #ifndef READER_H
 #define READER_H
 
-#include <stdio.h>
 #include <threads.h>
 #include <stddef.h>
 

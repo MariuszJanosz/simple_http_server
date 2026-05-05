@@ -1,9 +1,6 @@
 #include <stdlib.h>
-#include <stdio.h>
 #include <threads.h>
-#include <assert.h>
 #include <string.h>
-#include <errno.h>
 #include <stddef.h>
 
 #include <unistd.h>

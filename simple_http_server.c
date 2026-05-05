@@ -1,9 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
-#include <threads.h>
 #include <signal.h>
-#include <stdint.h>
 #include <limits.h>
 
 #include <unistd.h>
@@ -11,8 +8,6 @@
 #include "log.h"
 #include "reader.h"
 #include "tcp_connection.h"
-#include "http_message.h"
-#include "http_routing.h"
 #include "http_request_queue.h"
 
 #define IP (((unsigned int)127*(1<<24))+(0*(1<<16))+(0*(1<<8))+1) //127.0.0.1 localhost

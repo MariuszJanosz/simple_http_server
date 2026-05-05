@@ -7,11 +7,8 @@
 
 #include <string.h>
 #include <stdlib.h>
-#include <ctype.h>
 #include <inttypes.h>
-#include <stddef.h>
 
-#include <sys/types.h>
 #include <unistd.h>
 
 void init_http_message(Http_message_t* http_msg, Message_type_t type) {
