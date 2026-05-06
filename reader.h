@@ -31,6 +31,7 @@ int get_data(Input_queue_t* iq, char* output, size_t count);
 int is_reading_finished(Input_queue_t* iq);
 Input_queue_t* init_reader(int fd); 
 char* input_queue_get_line(Input_queue_t* iq, int* new_line_found);
+void abort_input_queue(Input_queue_t* iq);
 
 #endif //READER_H
 

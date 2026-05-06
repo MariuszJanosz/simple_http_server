@@ -90,7 +90,6 @@ int read_chunk(int fd, Input_queue_t* iq) {
         iq->reached_eof = 1;
         cnd_signal(&iq->cnd_is_nonempty_or_eof);
         mtx_unlock(&iq->mtx);
-        return 0;
     }
     else {
         char* ptr = buff;
@@ -100,7 +99,11 @@ int read_chunk(int fd, Input_queue_t* iq) {
             ptr += tmp;
         }
     }
-    return 1;
+    int res;
+    mtx_lock(&iq->mtx);
+    res = !iq->reached_eof;
+    mtx_unlock(&iq->mtx);
+    return res;
 }
 
 int reader_thr(void* reader_context) {
@@ -234,5 +237,20 @@ char* input_queue_get_line(Input_queue_t* iq, int* new_line_found) {
         size -= tmp;
     }
     return res;
+}
+
+void abort_input_queue(Input_queue_t* iq) {
+    if (mtx_lock(&iq->mtx) == thrd_error) {
+        LOG(ERROR, "mtx_lock failed!");
+        exit(1);
+    }
+    iq->reached_eof = 1;
+    iq->is_nonfull = 1;
+    iq->is_nonempty = 0;
+    iq->front = -1;
+    iq->rear = -1;
+    cnd_signal(&iq->cnd_is_nonfull);
+    cnd_signal(&iq->cnd_is_nonempty_or_eof);
+    mtx_unlock(&iq->mtx);
 }
 
