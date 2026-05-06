@@ -58,7 +58,7 @@ int main(int argc, char** argv) {
     }
 
     //Start worker threads writing and sending responses
-#define NUMBER_OF_WRITERS 8
+#define NUMBER_OF_WRITERS 4
     if (NUMBER_OF_WRITERS > REQUEST_QUEUE_CAPACITY) {
         LOG(ERROR, "Too many writers!");
         exit(1);

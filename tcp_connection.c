@@ -8,7 +8,7 @@
 #include "tcp_connection.h"
 #include "log.h"
 
-#define CONN_BACKLOG 8
+#define CONN_BACKLOG 128
 
 int create_tcp_listener(uint32_t ip, uint16_t port) {
     int list_sock_fd = socket(AF_INET, SOCK_STREAM, 0);
