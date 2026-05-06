@@ -9,22 +9,20 @@
 
 #define REQUEST_QUEUE_CAPACITY 256
 
-typedef struct Request_response_pair_t {
+typedef struct Request_block_t {
     Http_message_t* req;
     Http_status_t status;
-    Http_message_t* res;
     int request_ready;
 
     cnd_t cnd_request_ready;
     cnd_t cnd_is_front;
-} Request_response_pair_t;
+} Request_block_t;
 
 typedef struct Request_queue_t {
-    Request_response_pair_t queue[REQUEST_QUEUE_CAPACITY];
+    Request_block_t queue[REQUEST_QUEUE_CAPACITY];
     int front;
     int rear;
     int is_nonfull;
-    int is_empty;
 
     mtx_t mtx;
 

@@ -91,21 +91,20 @@ long get_file_size(FILE* f) {
 
 void init_request_queue(Request_queue_t* rq) {
     for (int i = 0; i < REQUEST_QUEUE_CAPACITY; ++i) {
-        Request_response_pair_t* rrp = &rq->queue[i];
-        rrp->request_ready = 0;
-        if (cnd_init(&rrp->cnd_request_ready) != thrd_success) {
+        Request_block_t* rb = &rq->queue[i];
+        rb->request_ready = 0;
+        if (cnd_init(&rb->cnd_request_ready) != thrd_success) {
             LOG(ERROR, "cnd_init failed!");
             exit(1);
         }
-        if (cnd_init(&rrp->cnd_is_front) != thrd_success) {
+        if (cnd_init(&rb->cnd_is_front) != thrd_success) {
             LOG(ERROR, "cnd_init failed!");
             exit(1);
         }
     }
     rq->front = 0;
-    rq->rear = 0;
+    rq->rear = -1;
     rq->is_nonfull = 1;
-    rq->is_empty = 1;
 
     if (mtx_init(&rq->mtx, mtx_plain) == thrd_error) {
         LOG(ERROR, "mtx_init failed!");
@@ -119,9 +118,9 @@ void init_request_queue(Request_queue_t* rq) {
 
 void free_request_queue(Request_queue_t* rq) {
     for (int i = 0; i < REQUEST_QUEUE_CAPACITY; ++i) {
-        Request_response_pair_t* rrp = &rq->queue[i];
-        cnd_destroy(&rrp->cnd_request_ready);
-        cnd_destroy(&rrp->cnd_is_front);
+        Request_block_t* rb = &rq->queue[i];
+        cnd_destroy(&rb->cnd_request_ready);
+        cnd_destroy(&rb->cnd_is_front);
     }
     mtx_destroy(&rq->mtx);
     cnd_destroy(&rq->cnd_is_nonfull);
@@ -143,22 +142,20 @@ int response_writer_thr(void* response_writer_context) {
             LOG(ERROR, "mtx_lock failed!");
             exit(1);
         }
-        Request_response_pair_t* rrp = &rq->queue[curr_index];
-        while (!rrp->request_ready) {
-            cnd_wait(&rrp->cnd_request_ready, &rq->mtx);
-            if (    request_queue_manager_finished &&
-                    !rq->queue[curr_index].request_ready) {
+        Request_block_t* rb = &rq->queue[curr_index];
+        while (!rb->request_ready) {
+            if (request_queue_manager_finished && !rq->queue[curr_index].request_ready) {
                 goto cleanup;
             }
+            cnd_wait(&rb->cnd_request_ready, &rq->mtx);
         }
+        rb->request_ready = 0;
+        Http_message_t *req = rb->req;
+        Http_status_t status = rb->status;
         mtx_unlock(&rq->mtx);
-        rrp->request_ready = 0;
 
         //Prepare response
-        Http_message_t *req = rrp->req;
-        Http_status_t status = rrp->status;
         Http_message_t res;
-        rrp->res = &res;
         init_http_message(&res, HTTP_RESPONSE);
         char* body = NULL;
         char size[1024];
@@ -213,41 +210,30 @@ int response_writer_thr(void* response_writer_context) {
             exit(1);
         }
         while (curr_index != rq->front) {
-            cnd_wait(&rrp->cnd_is_front, &rq->mtx);
+            cnd_wait(&rb->cnd_is_front, &rq->mtx);
         }
-        mtx_unlock(&rq->mtx);
 
         //Send response
         send_response(tcp_con, &res);
 
         DEBUG(echo_response(&res));
 
-        //Cleanup
-        if (mtx_lock(&rq->mtx) == thrd_error) {
-            LOG(ERROR, "mtx_lock failed!");
-            exit(1);
+        //Request block cleanup
+        if (req) {
+            free_http_message(req);
+            free(req);
         }
-        if (rrp->req) {
-            free_http_message(rrp->req);
-            free(rrp->req);
-        }
-        if (rrp->res) {
-            free_http_message(rrp->res);
-        }
-        if (rq->front == rq->rear) {
-            rq->is_empty = 1;
-            rq->rear += 1;
-            rq->rear %= REQUEST_QUEUE_CAPACITY;
-        }
+        free_http_message(&res);
         rq->front += 1;
         rq->front %= REQUEST_QUEUE_CAPACITY;
         rq->is_nonfull = 1;
+        //Move to next queue position
         curr_index += number_of_workers;
         curr_index %= REQUEST_QUEUE_CAPACITY;
+        //Wake next writer if ready and queue manager if queue was full
         cnd_signal(&rq->queue[rq->front].cnd_is_front);
         cnd_signal(&rq->cnd_is_nonfull);
-        if (    request_queue_manager_finished &&
-                !rq->queue[curr_index].request_ready) {
+        if (request_queue_manager_finished && !rq->queue[curr_index].request_ready) {
             goto cleanup;
         }
         mtx_unlock(&rq->mtx);
@@ -294,30 +280,33 @@ void request_queue_manager(Request_queue_t* rq, Input_queue_t* iq) {
         
         DEBUG(echo_request(req));
 
-        //TODO for certain statuses immediately break the loop
-        //also make an error or EOF in parse_http_request return one of these statuses
-        //instead of nuking entire process
-
         //Get rq->mtx and put request to rq
         if (mtx_lock(&rq->mtx) == thrd_error) {
             LOG(ERROR, "mtx_lock failed!");
             exit(1);
         }
+
+        //If request is broken break
+        if (!req->start_line) {
+            free(req);
+            abort_input_queue(iq);
+            mtx_unlock(&rq->mtx);
+            break;
+        }
+
         while (!rq->is_nonfull) {
             cnd_wait(&rq->cnd_is_nonfull, &rq->mtx);
         }
-        if (!rq->is_empty) {
-            rq->rear += 1;
-            rq->rear %= REQUEST_QUEUE_CAPACITY;
-        }
+        rq->rear += 1;
+        rq->rear %= REQUEST_QUEUE_CAPACITY;
         if ((rq->rear + 1) % REQUEST_QUEUE_CAPACITY == rq->front) {
             rq->is_nonfull = 0;
         }
-        Request_response_pair_t* rrp = &rq->queue[rq->rear];
-        rrp->req = req;
-        rrp->status = status;
-        rrp->request_ready = 1;
-        cnd_signal(&rrp->cnd_request_ready);
+        Request_block_t* rb = &rq->queue[rq->rear];
+        rb->req = req;
+        rb->status = status;
+        rb->request_ready = 1;
+        cnd_signal(&rb->cnd_request_ready);
         mtx_unlock(&rq->mtx);
     }
     if (mtx_lock(&rq->mtx) == thrd_error) {
