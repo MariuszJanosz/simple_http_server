@@ -34,13 +34,12 @@ typedef struct Response_writer_context_t {
     int number_of_workers;
     int start_index;
     Tcp_connection_t tcp_con;
-    char* www_root;
 } Response_writer_context_t;
 
 void init_request_queue(Request_queue_t* rq);
 void free_request_queue(Request_queue_t* rq);
 int response_writer_thr(void* response_writer_context);
-void init_writers(Request_queue_t* rq, int number_of_workers, Tcp_connection_t tcp_con, char* www_root);
+void init_writers(Request_queue_t* rq, int number_of_workers, Tcp_connection_t tcp_con);
 void request_queue_manager(Request_queue_t* rq, Input_queue_t* iq);
 
 #endif //HTTP_REQUEST_QUEUE_H

@@ -28,8 +28,9 @@ void set_up_www_root(int argc, char** argv, char* www_root) {
     }
 }
 
+char www_root[PATH_MAX];
+
 int main(int argc, char** argv) {
-    char www_root[PATH_MAX];
     set_up_www_root(argc, argv, www_root);
     //Do not wait for children return values, prevents zombie processes
     signal(SIGCHLD, SIG_IGN);
@@ -63,7 +64,7 @@ int main(int argc, char** argv) {
         LOG(ERROR, "Too many writers!");
         exit(1);
     }
-    init_writers(&rq, NUMBER_OF_WRITERS, tcp_connection, www_root);
+    init_writers(&rq, NUMBER_OF_WRITERS, tcp_connection);
 
     //Loop inside request queue menager and parse requests as long as the connection is active
     request_queue_manager(&rq, iq);

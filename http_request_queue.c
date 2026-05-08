@@ -1,9 +1,9 @@
 #include "log.h"
 #include "http_request_queue.h"
-#include "http_routing.h"
 #include "tcp_connection.h"
 #include "http_message.h"
 #include "reader.h"
+#include "http_request_handler.h"
 
 #include <threads.h>
 #include <stdlib.h>
@@ -68,27 +68,6 @@ void echo_response(Http_message_t* res) {
     fflush(stdout);
 }
 
-long get_file_size(FILE* f) {
-    long curr = ftell(f);
-    if (curr < 0) {
-        LOG(ERROR, "ftell failed!");
-    }
-    if (fseek(f, 0, SEEK_END)) {
-        LOG(ERROR, "fseek failed!");
-        exit(1);
-    }
-    long res = ftell(f);
-    if (res < 0) {
-        LOG(ERROR, "ftell failed!");
-        exit(1);
-    }
-    if (fseek(f, curr, SEEK_SET)) {
-        LOG(ERROR, "fseek failed!");
-        exit(1);
-    }
-    return res;
-}
-
 void init_request_queue(Request_queue_t* rq) {
     for (int i = 0; i < REQUEST_QUEUE_CAPACITY; ++i) {
         Request_block_t* rb = &rq->queue[i];
@@ -134,7 +113,6 @@ int response_writer_thr(void* response_writer_context) {
     int number_of_workers = ((Response_writer_context_t*)(response_writer_context))->number_of_workers;
     int curr_index = ((Response_writer_context_t*)(response_writer_context))->start_index;
     Tcp_connection_t tcp_con = ((Response_writer_context_t*)(response_writer_context))->tcp_con;
-    char* www_root = ((Response_writer_context_t*)(response_writer_context))->www_root;
     
     while (1) {
         //Wait until request is ready
@@ -157,53 +135,8 @@ int response_writer_thr(void* response_writer_context) {
         //Prepare response
         Http_message_t res;
         init_http_message(&res, HTTP_RESPONSE);
-        char* body = NULL;
-        char size[1024];
-        size_t body_len = 0;
-        switch (status) {
-            case HTTP_STATUS_OK:
-                {
-                    char route[PATH_MAX];
-                    status = route_http_request(req, route, www_root);
-                    FILE* f = fopen(route, "rb");
-                    if (!f) {
-                        LOG(ERROR, "fopen failed!");
-                        exit(1);
-                    }
-                    long fs = get_file_size(f);
-                    if (fs == 0) {
-                        fclose(f);
-                        break;
-                    }
-                    body = malloc(fs);
-                    if (!body) {
-                        LOG(ERROR, "malloc failed!");
-                        exit(1);
-                    }
-                    if (fread(body, 1, fs, f) < fs) {
-                        LOG(ERROR, "fread failed!");
-                        exit(1);
-                    }
-                    fclose(f);
-                    body_len = fs;
-                }
-                break;
-            default:
-                {
-                    
-                }
-                break;
-        }
-        char status_char[4];
-        sprintf(status_char, "%d", status);
-        write_response_status_line(&res, "HTTP/1.1",
-                status_char, (char*)http_status_to_string(status));
-        if (body_len) {
-            sprintf(size, "%zu", body_len);
-            write_response_field_line(&res, "Content-length", size);
-            write_response_body_content_length(&res, body, body_len);
-        }
-
+        handle_http_request(req, &res, &status);
+        
         //Wait until it is this response turn
         if (mtx_lock(&rq->mtx) == thrd_error) {
             LOG(ERROR, "mtx_lock failed!");
@@ -248,7 +181,7 @@ cleanup:
     thrd_exit(0);
 }
 
-void init_writers(Request_queue_t* rq, int number_of_workers, Tcp_connection_t tcp_con, char* www_root) {
+void init_writers(Request_queue_t* rq, int number_of_workers, Tcp_connection_t tcp_con) {
     for (int i = 0; i < number_of_workers; ++i) {
         Response_writer_context_t* rwc = malloc(sizeof(*rwc));
         if (!rwc) {
@@ -259,7 +192,6 @@ void init_writers(Request_queue_t* rq, int number_of_workers, Tcp_connection_t t
         rwc->number_of_workers = number_of_workers;
         rwc->start_index = i;
         rwc->tcp_con = tcp_con;
-        rwc->www_root = www_root;
 
         thrd_t thr;
         thrd_create(&thr, response_writer_thr, rwc);
