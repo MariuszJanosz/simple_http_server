@@ -7,7 +7,7 @@
 
 #include <unistd.h>
 
-#define LEFTOVER_CAPACITY 1024
+#define LEFTOVER_CAPACITY (4 * 1024)
 
 int reading_finished = 0;
 char leftover[LEFTOVER_CAPACITY];
@@ -23,7 +23,22 @@ size_t try_get_data(Tcp_connection_t tcp_con, char* output, size_t count) {
 }
 
 size_t get_data(Tcp_connection_t tcp_con, char* output, size_t count) {
-    return try_get_data(tcp_con, output, count);
+    if (count <= leftover_size) {
+        memcpy(output, leftover, count);
+        memmove(leftover, leftover + count, leftover_size - count);
+        leftover_size -= count;
+        return count;
+    }
+    else if (leftover_size > 0) {
+        memcpy(output, leftover, leftover_size);
+        leftover_size = 0;
+        return leftover_size;
+    }
+    leftover_size = try_get_data(tcp_con, leftover, LEFTOVER_CAPACITY);
+    if (leftover_size == 0) {//EOF
+        return 0;
+    }
+    return get_data(tcp_con, output, count);
 }
 
 char* get_line(Tcp_connection_t tcp_con) {
