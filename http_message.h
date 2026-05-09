@@ -128,10 +128,10 @@ typedef void (*Chunker_func_t)(int fd, char* chunk, size_t* bytes_read, int* fin
 
 void init_http_message(Http_message_t* http_msg, Message_type_t type);
 void free_http_message(Http_message_t* http_msg);
-Http_status_t parse_request_line(Http_message_t* http_msg, Input_queue_t* iq);
-Http_status_t parse_field_line(Http_message_t* http_msg, Input_queue_t* iq, int *is_empty);
-Http_status_t read_body(Http_message_t* http_msg, Input_queue_t* iq);
-Http_status_t parse_http_request(Http_message_t* http_msg, Input_queue_t* iq);
+Http_status_t parse_request_line(Http_message_t* http_msg, Tcp_connection_t tcp_con);
+Http_status_t parse_field_line(Http_message_t* http_msg, Tcp_connection_t tcp_con, int *is_empty);
+Http_status_t read_body(Http_message_t* http_msg, Tcp_connection_t tcp_con);
+Http_status_t parse_http_request(Http_message_t* http_msg, Tcp_connection_t tcp_con);
 void write_response_status_line(Http_message_t* http_msg, char* http_version, char* status, char* reason);
 void write_response_field_line(Http_message_t* http_msg, char* field_name, char* field_value);
 void write_response_body_content_length(Http_message_t* http_msg, char* body, size_t content_length);

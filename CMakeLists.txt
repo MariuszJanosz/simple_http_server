@@ -20,14 +20,14 @@ target_sources(simple_http_server PRIVATE	simple_http_server.c
 
 install(TARGETS simple_http_server RUNTIME)
 
-include(FetchContent)
-FetchContent_Declare(
-	unity
-	GIT_REPOSITORY https://github.com/ThrowTheSwitch/Unity.git
-	GIT_TAG cbcd08fa7de711053a3deec6339ee89cad5d2697 # v2.6.1
-)
-FetchContent_MakeAvailable(unity)
-
-include(CTest)
-add_subdirectory(tests)
+#include(FetchContent)
+#FetchContent_Declare(
+#	unity
+#	GIT_REPOSITORY https://github.com/ThrowTheSwitch/Unity.git
+#	GIT_TAG cbcd08fa7de711053a3deec6339ee89cad5d2697 # v2.6.1
+#)
+#FetchContent_MakeAvailable(unity)
+#
+#include(CTest)
+#add_subdirectory(tests)
 

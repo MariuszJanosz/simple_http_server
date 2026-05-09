@@ -50,7 +50,6 @@ int main(int argc, char** argv) {
         }
     }
 
-    Input_queue_t* iq = init_reader(tcp_connection.fd);
     Request_queue_t rq;
     init_request_queue(&rq);
     if (cnd_init(&cnd_worker_finished) != thrd_success) {
@@ -67,7 +66,7 @@ int main(int argc, char** argv) {
     init_writers(&rq, NUMBER_OF_WRITERS, tcp_connection);
 
     //Loop inside request queue menager and parse requests as long as the connection is active
-    request_queue_manager(&rq, iq);
+    request_queue_manager(&rq, tcp_connection);
 
     //Wait for all workers to finish
     if (mtx_lock(&rq.mtx) == thrd_error) {
@@ -83,7 +82,6 @@ int main(int argc, char** argv) {
     cnd_destroy(&cnd_worker_finished);
     free_request_queue(&rq);
     close_tcp_connection(&tcp_connection);
-    free_input_queue(iq);
     fflush(stdout);
     return 0;
 }

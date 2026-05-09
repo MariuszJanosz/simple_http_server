@@ -173,34 +173,10 @@ Http_status_t is_valid_http_version(char* str) {
     return HTTP_STATUS_HTTP_VERSION_NOT_SUPPORTED;
 }
 
-char* get_line(Input_queue_t* iq) {
-    int new_line_found = 0;
-    char* line = input_queue_get_line(iq, &new_line_found);
-    if (!line) {
-        return NULL;
-    }
-    while (!new_line_found) {
-        char* tmp = input_queue_get_line(iq, &new_line_found);
-        if (!tmp) {
-            return line;
-        }
-        size_t line_len = strlen(line);
-        size_t tmp_len = strlen(tmp);
-        char* tmpp = realloc(line, (line_len + tmp_len + 1) * sizeof(*line));
-        if (!tmpp) {
-            LOG(ERROR, "realloc failed!");
-            exit(1);
-        }
-        line = tmpp;
-        strcat(line, tmp);
-    }
-    return line;
-}
-
-Http_status_t parse_request_line(Http_message_t* http_msg, Input_queue_t* iq) {
+Http_status_t parse_request_line(Http_message_t* http_msg, Tcp_connection_t tcp_con) {
 again:
-    char* input = get_line(iq);
-    if (!input) {
+    char* input = get_line(tcp_con);
+    if (!input || input[0] == '\0') {
         return HTTP_STATUS_BAD_REQUEST;
     }
     //RFC9112 2.2 empty line before request-line should be ignored
@@ -265,8 +241,8 @@ Http_status_t is_valid_field_value(char* value) {
     return HTTP_STATUS_OK;
 }
 
-Http_status_t parse_field_line(Http_message_t* http_msg, Input_queue_t* iq, int *is_empty) {
-    char* input = get_line(iq);
+Http_status_t parse_field_line(Http_message_t* http_msg, Tcp_connection_t tcp_con, int *is_empty) {
+    char* input = get_line(tcp_con);
     if (!input) {
         *is_empty = 1;
         return HTTP_STATUS_BAD_REQUEST;
@@ -327,7 +303,7 @@ Http_status_t parse_field_line(Http_message_t* http_msg, Input_queue_t* iq, int 
     return HTTP_STATUS_OK;
 }
 
-Http_status_t read_body_cl(Http_message_t* http_msg, Input_queue_t* iq, size_t content_length) {
+Http_status_t read_body_cl(Http_message_t* http_msg, Tcp_connection_t tcp_con, size_t content_length) {
     unsigned char* body_data = malloc(content_length * sizeof(*body_data));
     if (!body_data) {
         LOG(ERROR, "malloc failed!");
@@ -337,14 +313,20 @@ Http_status_t read_body_cl(Http_message_t* http_msg, Input_queue_t* iq, size_t c
     while (read < content_length) {
         unsigned char* first_empty = body_data + read;
         size_t to_read = content_length - read;
-        read += get_data(iq, first_empty, to_read);
+        size_t r = get_data(tcp_con, first_empty, to_read);
+        if (r == 0) { //EOF before entire content was transfered
+            http_msg->message_body = body_data;
+            http_msg->body_size = read;
+            return HTTP_STATUS_BAD_REQUEST;
+        }
+        read += r;
     }
     http_msg->message_body = body_data;
     http_msg->body_size = content_length;
     return HTTP_STATUS_OK;
 }
 
-Http_status_t read_body_chunked(Http_message_t* http_msg, Input_queue_t* iq) {
+Http_status_t read_body_chunked(Http_message_t* http_msg, Tcp_connection_t tcp_con) {
     size_t data_capacity = 1024; //1kB
     unsigned char* body_data = malloc(data_capacity * sizeof(*body_data));
     size_t data_first_free_index = 0;
@@ -354,7 +336,7 @@ Http_status_t read_body_chunked(Http_message_t* http_msg, Input_queue_t* iq) {
     }
     int finished = 0;
     while (!finished) {
-        char* size = get_line(iq);
+        char* size = get_line(tcp_con);
         if (!size) {
             free(body_data);
             return HTTP_STATUS_BAD_REQUEST;
@@ -396,7 +378,7 @@ Http_status_t read_body_chunked(Http_message_t* http_msg, Input_queue_t* iq) {
             fake_tmp.message_body = NULL;
             //If we are here 0 < content_length < MAX_BODY_SIZE
             //we can safely cast to size_t
-            read_body_cl(&fake_tmp, iq, (size_t)content_length);
+            read_body_cl(&fake_tmp, tcp_con, (size_t)content_length);
             if (content_length > (data_capacity - data_first_free_index)) {
                 while (content_length > (data_capacity - data_first_free_index)) {
                     data_capacity *= 2;
@@ -413,47 +395,17 @@ Http_status_t read_body_chunked(Http_message_t* http_msg, Input_queue_t* iq) {
             free(fake_tmp.message_body);
         }
         free(size);
-        char* tmp = get_line(iq);
+        //Flush remaining \r\n
+        char* tmp = get_line(tcp_con);
         if (!tmp) {
             free(body_data);
             return HTTP_STATUS_BAD_REQUEST;
         }
-        free(tmp); //Flush remaining \r\n
+        free(tmp);
     }
     http_msg->message_body = body_data;
     http_msg->body_size = data_first_free_index;
     return HTTP_STATUS_OK;
-}
-
-//For now it works only for requests like Transfer-Encoding: chunked but not for Transfer-Encoding:gzip,chunked
-Http_status_t read_body(Http_message_t* http_msg, Input_queue_t* iq) {
-    int transfer_encoding_index = -1;
-    if (has_field(http_msg, "Transfer-Encoding", &transfer_encoding_index)) {
-        char* transfer_encoding_val =
-                    http_msg->field_lines[transfer_encoding_index].field_value;
-        if (strcmp(transfer_encoding_val, "chunked") == 0) {
-            return read_body_chunked(http_msg, iq);
-        }
-    }
-    int content_length_index = -1;
-    if (has_field(http_msg, "Content-Length", &content_length_index)) {
-        char* str = http_msg->field_lines[content_length_index].field_value;
-        if (!abnf_is_DIGIT(str[0])) {
-            return HTTP_STATUS_BAD_REQUEST;
-        }
-        char* end;
-        uintmax_t content_length = strtoumax(str, &end, 10);
-        if (*end != '\0') {
-            return HTTP_STATUS_BAD_REQUEST;
-        }
-        if (content_length > MAX_BODY_SIZE) {
-            return HTTP_STATUS_PAYLOAD_TOO_LARGE;
-        }
-        //If we are here 0 <= content_length <= MAX_BODY_SIZE
-        //we can safely cast to size_t
-        return read_body_cl(http_msg, iq, (size_t)content_length);
-    }
-    return HTTP_STATUS_OK; //There is no body
 }
 
 int has_field(Http_message_t* http_msg, char* field_name, int* out_index) {
@@ -480,6 +432,37 @@ int has_field(Http_message_t* http_msg, char* field_name, int* out_index) {
         *out_index = i;
     }
     return 1;
+}
+
+//For now it works only for requests like Transfer-Encoding: chunked but not for Transfer-Encoding:gzip,chunked
+Http_status_t read_body(Http_message_t* http_msg, Tcp_connection_t tcp_con) {
+    int transfer_encoding_index = -1;
+    if (has_field(http_msg, "Transfer-Encoding", &transfer_encoding_index)) {
+        char* transfer_encoding_val =
+                    http_msg->field_lines[transfer_encoding_index].field_value;
+        if (strcmp(transfer_encoding_val, "chunked") == 0) {
+            return read_body_chunked(http_msg, tcp_con);
+        }
+    }
+    int content_length_index = -1;
+    if (has_field(http_msg, "Content-Length", &content_length_index)) {
+        char* str = http_msg->field_lines[content_length_index].field_value;
+        if (!abnf_is_DIGIT(str[0])) {
+            return HTTP_STATUS_BAD_REQUEST;
+        }
+        char* end;
+        uintmax_t content_length = strtoumax(str, &end, 10);
+        if (*end != '\0') {
+            return HTTP_STATUS_BAD_REQUEST;
+        }
+        if (content_length > MAX_BODY_SIZE) {
+            return HTTP_STATUS_PAYLOAD_TOO_LARGE;
+        }
+        //If we are here 0 <= content_length <= MAX_BODY_SIZE
+        //we can safely cast to size_t
+        return read_body_cl(http_msg, tcp_con, (size_t)content_length);
+    }
+    return HTTP_STATUS_OK; //There is no body
 }
 
 Http_status_t host_field_matches_request_target(Http_message_t* http_msg) {
@@ -597,22 +580,22 @@ Http_status_t host_field_matches_request_target(Http_message_t* http_msg) {
     return HTTP_STATUS_OK;
 }
 
-Http_status_t parse_http_request(Http_message_t* http_msg, Input_queue_t* iq) {
-    Http_status_t status = parse_request_line(http_msg, iq);
+Http_status_t parse_http_request(Http_message_t* http_msg, Tcp_connection_t tcp_con) {
+    Http_status_t status = parse_request_line(http_msg, tcp_con);
     int is_empty = 0;
     while (!is_empty) {
         if (status == HTTP_STATUS_OK) {
-            status = parse_field_line(http_msg, iq, &is_empty);
+            status = parse_field_line(http_msg, tcp_con, &is_empty);
         }
         else {
-            parse_field_line(http_msg, iq, &is_empty);
+            parse_field_line(http_msg, tcp_con, &is_empty);
         }
     }
     if (status == HTTP_STATUS_OK) {
-        status = read_body(http_msg, iq);
+        status = read_body(http_msg, tcp_con);
     }
     else {
-        read_body(http_msg, iq);
+        read_body(http_msg, tcp_con);
     }
     if (status == HTTP_STATUS_OK) {
         status = host_field_matches_request_target(http_msg);

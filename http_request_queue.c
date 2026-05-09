@@ -199,8 +199,8 @@ void init_writers(Request_queue_t* rq, int number_of_workers, Tcp_connection_t t
     }
 }
 
-void request_queue_manager(Request_queue_t* rq, Input_queue_t* iq) {
-    while (!is_reading_finished(iq)) {
+void request_queue_manager(Request_queue_t* rq, Tcp_connection_t tcp_con) {
+    while (!is_reading_finished(tcp_con)) {
         //prepare next request
         Http_message_t* req = malloc(sizeof(*req));
         if (!req) {
@@ -208,7 +208,7 @@ void request_queue_manager(Request_queue_t* rq, Input_queue_t* iq) {
             exit(1);
         }
         init_http_message(req, HTTP_REQUEST);
-        Http_status_t status = parse_http_request(req, iq);
+        Http_status_t status = parse_http_request(req, tcp_con);
         
         DEBUG(echo_request(req));
 
@@ -221,7 +221,7 @@ void request_queue_manager(Request_queue_t* rq, Input_queue_t* iq) {
         //If request is broken break
         if (!req->start_line) {
             free(req);
-            abort_input_queue(iq);
+            abort_reading(tcp_con);
             mtx_unlock(&rq->mtx);
             break;
         }
