@@ -38,6 +38,9 @@ void http_get_handler(Http_message_t* req, Http_message_t* res, Http_status_t* s
             {
                 char route[PATH_MAX];
                 *status = route_http_request(req, route, www_root);
+                if (*status != HTTP_STATUS_OK && *status != HTTP_STATUS_NOT_FOUND) {
+                    break;
+                }
                 FILE* f = fopen(route, "rb");
                 if (!f) {
                     LOG(ERROR, "fopen failed!");

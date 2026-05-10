@@ -10,7 +10,10 @@ Http_status_t route_http_request(Http_message_t* req, char* route, char* www_roo
     char* target = NULL;
     Http_status_t res = HTTP_STATUS_OK;
 
-    if (    strcmp(req_tar, "/") == 0 ||
+    if (len + strlen(req_tar) + 1 > PATH_MAX) {
+        return HTTP_STATUS_URI_TOO_LONG;
+    }
+    else if (    strcmp(req_tar, "/") == 0 ||
             strcmp(req_tar, "/index.html") == 0) {
         target = "/index.html";
     }
@@ -19,9 +22,6 @@ Http_status_t route_http_request(Http_message_t* req, char* route, char* www_roo
         res = HTTP_STATUS_NOT_FOUND;
     }
 
-    if (len + strlen(target) + 1 > PATH_MAX) {
-        //TODO
-    }
     strcpy(route, www_root);
     strcpy(route + len, target);
     return res;
