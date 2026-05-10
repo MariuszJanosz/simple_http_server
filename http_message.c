@@ -37,6 +37,18 @@ void free_http_message(Http_message_t* http_msg) {
                 free(rl->http_version);
             }
         }
+        else {
+            Status_line_t* sl = http_msg->start_line;
+            if (sl->http_version) {
+                free(sl->http_version);
+            }
+            if (sl->status_code) {
+                free(sl->status_code);
+            }
+            if (sl->status_text) {
+                free(sl->status_text);
+            }
+        }
         free(http_msg->start_line);
     }
     for (int i = 0; i < http_msg->field_lines_count; ++i) {
@@ -742,9 +754,9 @@ void write_response_status_line(Http_message_t* http_msg, char* http_version, ch
         LOG(ERROR, "malloc failed!");
         exit(1);
     }
-    ((Status_line_t*)(http_msg->start_line))->http_version = http_version;
-    ((Status_line_t*)(http_msg->start_line))->status_code = status;
-    ((Status_line_t*)(http_msg->start_line))->status_text = reason;
+    ((Status_line_t*)(http_msg->start_line))->http_version = strdup(http_version);
+    ((Status_line_t*)(http_msg->start_line))->status_code = strdup(status);
+    ((Status_line_t*)(http_msg->start_line))->status_text = strdup(reason);
 }
 
 void write_response_field_line(Http_message_t* http_msg, char* field_name, char* field_value) {
