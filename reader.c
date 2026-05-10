@@ -12,6 +12,7 @@
 int reading_finished = 0;
 char leftover[LEFTOVER_CAPACITY];
 int leftover_size = 0;
+int leftover_start_index = 0;
 
 size_t try_get_data(Tcp_connection_t tcp_con, char* output, size_t count) {
     size_t r = read(tcp_con.fd, output, count);
@@ -24,13 +25,14 @@ size_t try_get_data(Tcp_connection_t tcp_con, char* output, size_t count) {
 
 size_t get_data(Tcp_connection_t tcp_con, char* output, size_t count) {
     if (count <= leftover_size) {
-        memcpy(output, leftover, count);
-        memmove(leftover, leftover + count, leftover_size - count);
+        memcpy(output, leftover + leftover_start_index, count);
+        leftover_start_index += count;
         leftover_size -= count;
         return count;
     }
     else if (leftover_size > 0) {
         memcpy(output, leftover, leftover_size);
+        leftover_start_index = 0;
         leftover_size = 0;
         return leftover_size;
     }
@@ -45,7 +47,7 @@ char* get_line(Tcp_connection_t tcp_con) {
     if (leftover_size > 0) {
         int i = 0;
         while (i < leftover_size) {
-            if (leftover[i] == '\n')
+            if (leftover[leftover_start_index + i] == '\n')
                 break;
             ++i;
         }
@@ -56,9 +58,9 @@ char* get_line(Tcp_connection_t tcp_con) {
                 LOG(ERROR, "malloc failed!");
                 exit(1);
             }
-            memcpy(res, leftover, i + 1);
+            memcpy(res, leftover + leftover_start_index, i + 1);
             res[i + 1] = '\0';
-            memmove(leftover, leftover + i + 1, leftover_size - (i + 1));
+            leftover_start_index += (i + 1);
             leftover_size -= (i + 1);
             return res;
         }
@@ -69,8 +71,9 @@ char* get_line(Tcp_connection_t tcp_con) {
                 LOG(ERROR, "malloc failed!");
                 exit(1);
             }
-            memcpy(res, leftover, leftover_size);
+            memcpy(res, leftover + leftover_start_index, leftover_size);
             res[leftover_size] = '\0';
+            leftover_start_index = 0;
             leftover_size = 0;
             char* tail = get_line(tcp_con);
             if (!tail) { //EOF return whatever is already in res
