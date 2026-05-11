@@ -71,6 +71,11 @@ void echo_response(Http_message_t* res) {
 void init_request_queue(Request_queue_t* rq) {
     for (int i = 0; i < REQUEST_QUEUE_CAPACITY; ++i) {
         Request_block_t* rb = &rq->queue[i];
+        rb->req = malloc(sizeof(*rb->req));
+        if (!rb->req) {
+            LOG(ERROR, "malloc failed!");
+            exit(1);
+        }
         rb->request_ready = 0;
         if (cnd_init(&rb->cnd_request_ready) != thrd_success) {
             LOG(ERROR, "cnd_init failed!");
@@ -98,6 +103,7 @@ void init_request_queue(Request_queue_t* rq) {
 void free_request_queue(Request_queue_t* rq) {
     for (int i = 0; i < REQUEST_QUEUE_CAPACITY; ++i) {
         Request_block_t* rb = &rq->queue[i];
+        free(rb->req);
         cnd_destroy(&rb->cnd_request_ready);
         cnd_destroy(&rb->cnd_is_front);
     }
@@ -152,10 +158,7 @@ int response_writer_thr(void* response_writer_context) {
         DEBUG(echo_response(&res));
 
         //Request block cleanup
-        if (req) {
-            free_http_message(req);
-            free(req);
-        }
+        free_http_message(req);
         free_http_message(&res);
         rq->front += 1;
         rq->front %= REQUEST_QUEUE_CAPACITY;
@@ -202,11 +205,7 @@ void init_writers(Request_queue_t* rq, int number_of_workers, Tcp_connection_t t
 void request_queue_manager(Request_queue_t* rq, Tcp_connection_t tcp_con) {
     while (!is_reading_finished(tcp_con)) {
         //prepare next request
-        Http_message_t* req = malloc(sizeof(*req));
-        if (!req) {
-            LOG(ERROR, "malloc failed!");
-            exit(1);
-        }
+        Http_message_t* req = rq->queue[(rq->rear + 1) % REQUEST_QUEUE_CAPACITY].req;
         init_http_message(req, HTTP_REQUEST);
         Http_status_t status = parse_http_request(req, tcp_con);
         
@@ -220,7 +219,6 @@ void request_queue_manager(Request_queue_t* rq, Tcp_connection_t tcp_con) {
 
         //If request is broken break
         if (!req->start_line) {
-            free(req);
             abort_reading(tcp_con);
             mtx_unlock(&rq->mtx);
             break;
@@ -235,7 +233,6 @@ void request_queue_manager(Request_queue_t* rq, Tcp_connection_t tcp_con) {
             rq->is_nonfull = 0;
         }
         Request_block_t* rb = &rq->queue[rq->rear];
-        rb->req = req;
         rb->status = status;
         rb->request_ready = 1;
         cnd_signal(&rb->cnd_request_ready);
