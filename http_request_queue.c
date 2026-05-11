@@ -231,6 +231,9 @@ void request_queue_manager(Request_queue_t* rq, Tcp_connection_t tcp_con) {
         rq->rear %= REQUEST_QUEUE_CAPACITY;
         if ((rq->rear + 1) % REQUEST_QUEUE_CAPACITY == rq->front) {
             rq->is_nonfull = 0;
+            while (!rq->is_nonfull) {
+                cnd_wait(&rq->cnd_is_nonfull, &rq->mtx);
+            }
         }
         Request_block_t* rb = &rq->queue[rq->rear];
         rb->status = status;
