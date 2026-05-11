@@ -4,9 +4,9 @@
 #include <string.h>
 #include <limits.h>
 
-Http_status_t route_http_request(Http_message_t* req, char* route, char* www_root) {
+Http_status_t route_http_request(Http_message_t* req, char* route) {
     char* req_tar = ((Request_line_t*)(req->start_line))->request_target;
-    size_t len = strlen(www_root);
+    size_t len = strlen(g_www_root);
     char* target = NULL;
     Http_status_t res = HTTP_STATUS_OK;
 
@@ -22,7 +22,7 @@ Http_status_t route_http_request(Http_message_t* req, char* route, char* www_roo
         res = HTTP_STATUS_NOT_FOUND;
     }
 
-    strcpy(route, www_root);
+    strcpy(route, g_www_root);
     strcpy(route + len, target);
     return res;
 }

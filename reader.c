@@ -4,15 +4,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stddef.h>
+#include <threads.h>
 
 #include <unistd.h>
 
 #define LEFTOVER_CAPACITY (4 * 1024)
 
-int reading_finished = 0;
-char leftover[LEFTOVER_CAPACITY];
-int leftover_size = 0;
-int leftover_start_index = 0;
+static thread_local int stl_reading_finished = 0;
+static thread_local char stl_leftover[LEFTOVER_CAPACITY];
+static thread_local int stl_leftover_size = 0;
+static thread_local int stl_leftover_start_index = 0;
 
 size_t try_get_data(Tcp_connection_t tcp_con, char* output, size_t count) {
     size_t r = read(tcp_con.fd, output, count);
@@ -24,57 +25,57 @@ size_t try_get_data(Tcp_connection_t tcp_con, char* output, size_t count) {
 }
 
 size_t get_data(Tcp_connection_t tcp_con, char* output, size_t count) {
-    if (count <= leftover_size) {
-        memcpy(output, leftover + leftover_start_index, count);
-        leftover_start_index += count;
-        leftover_size -= count;
+    if (count <= stl_leftover_size) {
+        memcpy(output, stl_leftover + stl_leftover_start_index, count);
+        stl_leftover_start_index += count;
+        stl_leftover_size -= count;
         return count;
     }
-    else if (leftover_size > 0) {
-        memcpy(output, leftover, leftover_size);
-        leftover_start_index = 0;
-        leftover_size = 0;
-        return leftover_size;
+    else if (stl_leftover_size > 0) {
+        memcpy(output, stl_leftover, stl_leftover_size);
+        stl_leftover_start_index = 0;
+        stl_leftover_size = 0;
+        return stl_leftover_size;
     }
-    leftover_size = try_get_data(tcp_con, leftover, LEFTOVER_CAPACITY);
-    if (leftover_size == 0) {//EOF
+    stl_leftover_size = try_get_data(tcp_con, stl_leftover, LEFTOVER_CAPACITY);
+    if (stl_leftover_size == 0) {//EOF
         return 0;
     }
     return get_data(tcp_con, output, count);
 }
 
 char* get_line(Tcp_connection_t tcp_con) {
-    if (leftover_size > 0) {
+    if (stl_leftover_size > 0) {
         int i = 0;
-        while (i < leftover_size) {
-            if (leftover[leftover_start_index + i] == '\n')
+        while (i < stl_leftover_size) {
+            if (stl_leftover[stl_leftover_start_index + i] == '\n')
                 break;
             ++i;
         }
         //If there is '\n' in leftover
-        if (i < leftover_size) {
+        if (i < stl_leftover_size) {
             char* res = malloc((i + 2)); // (i + 1) == number of characters, +1 for '\0'
             if (!res) {
                 LOG(ERROR, "malloc failed!");
                 exit(1);
             }
-            memcpy(res, leftover + leftover_start_index, i + 1);
+            memcpy(res, stl_leftover + stl_leftover_start_index, i + 1);
             res[i + 1] = '\0';
-            leftover_start_index += (i + 1);
-            leftover_size -= (i + 1);
+            stl_leftover_start_index += (i + 1);
+            stl_leftover_size -= (i + 1);
             return res;
         }
         //There is no '\n'
         else {
-            char* res = malloc((leftover_size + 1));
+            char* res = malloc((stl_leftover_size + 1));
             if (!res) {
                 LOG(ERROR, "malloc failed!");
                 exit(1);
             }
-            memcpy(res, leftover + leftover_start_index, leftover_size);
-            res[leftover_size] = '\0';
-            leftover_start_index = 0;
-            leftover_size = 0;
+            memcpy(res, stl_leftover + stl_leftover_start_index, stl_leftover_size);
+            res[stl_leftover_size] = '\0';
+            stl_leftover_start_index = 0;
+            stl_leftover_size = 0;
             char* tail = get_line(tcp_con);
             if (!tail) { //EOF return whatever is already in res
                 return res;
@@ -92,19 +93,19 @@ char* get_line(Tcp_connection_t tcp_con) {
             return res;
         }
     }
-    leftover_size = try_get_data(tcp_con, leftover, LEFTOVER_CAPACITY);
+    stl_leftover_size = try_get_data(tcp_con, stl_leftover, LEFTOVER_CAPACITY);
     //EOF detected return NULL
-    if (leftover_size == 0) {
+    if (stl_leftover_size == 0) {
         return NULL;
     }
     return get_line(tcp_con);
 }
 
 int is_reading_finished(Tcp_connection_t tcp_con) {
-    return reading_finished;
+    return stl_reading_finished;
 }
 
 void abort_reading(Tcp_connection_t tcp_con) {
-    reading_finished = 1;
+    stl_reading_finished = 1;
 }
 

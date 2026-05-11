@@ -6,32 +6,30 @@
 #include <unistd.h>
 
 #include "log.h"
-#include "reader.h"
 #include "tcp_connection.h"
 #include "http_request_queue.h"
 
 #define IP (((unsigned int)127*(1<<24))+(0*(1<<16))+(0*(1<<8))+1) //127.0.0.1 localhost
 #define PORT 54321
 
-int workers_finished = 0;
-cnd_t cnd_worker_finished;
+int g_workers_finished = 0;
+cnd_t g_cnd_worker_finished;
+char g_www_root[PATH_MAX];
 
-void set_up_www_root(int argc, char** argv, char* www_root) {
+void set_up_www_root(int argc, char** argv) {
     if (argc != 2) {
         printf("USAGE: simple_http_server <path_to_www_root>\n");
         exit(1);
     }
     
-    if (!realpath(argv[1], www_root)) {
+    if (!realpath(argv[1], g_www_root)) {
         printf("USAGE: simple_http_server <path_to_www_root>\n");
         exit(1);
     }
 }
 
-char www_root[PATH_MAX];
-
 int main(int argc, char** argv) {
-    set_up_www_root(argc, argv, www_root);
+    set_up_www_root(argc, argv);
     //Do not wait for children return values, prevents zombie processes
     signal(SIGCHLD, SIG_IGN);
 
@@ -52,7 +50,7 @@ int main(int argc, char** argv) {
 
     Request_queue_t rq;
     init_request_queue(&rq);
-    if (cnd_init(&cnd_worker_finished) != thrd_success) {
+    if (cnd_init(&g_cnd_worker_finished) != thrd_success) {
         LOG(ERROR, "cnd_init failed!");
         exit(1);
     }
@@ -73,13 +71,13 @@ int main(int argc, char** argv) {
         LOG(ERROR, "mtx_lock failed!");
         exit(1);
     }
-    while (workers_finished < NUMBER_OF_WRITERS) {
-        cnd_wait(&cnd_worker_finished, &rq.mtx);
+    while (g_workers_finished < NUMBER_OF_WRITERS) {
+        cnd_wait(&g_cnd_worker_finished, &rq.mtx);
     }
     mtx_unlock(&rq.mtx);
 
     //Cleanup
-    cnd_destroy(&cnd_worker_finished);
+    cnd_destroy(&g_cnd_worker_finished);
     free_request_queue(&rq);
     close_tcp_connection(&tcp_connection);
     fflush(stdout);

@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <limits.h>
 
-extern char www_root[PATH_MAX];
+extern char g_www_root[PATH_MAX];
 
 long get_file_size(FILE* f) {
     long curr = ftell(f);
@@ -37,7 +37,7 @@ void http_get_handler(Http_message_t* req, Http_message_t* res, Http_status_t* s
         case HTTP_STATUS_OK:
             {
                 char route[PATH_MAX];
-                *status = route_http_request(req, route, www_root);
+                *status = route_http_request(req, route);
                 if (*status != HTTP_STATUS_OK && *status != HTTP_STATUS_NOT_FOUND) {
                     break;
                 }

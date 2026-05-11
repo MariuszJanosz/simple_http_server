@@ -11,9 +11,9 @@
 #include <limits.h>
 #include <signal.h>
 
-extern int workers_finished;
-extern cnd_t cnd_worker_finished;
-int request_queue_manager_finished = 0;
+extern int g_workers_finished;
+extern cnd_t g_cnd_worker_finished;
+static int s_request_queue_manager_finished = 0;
 
 void echo_request(Http_message_t* req) {
     static int req_id = 0;
@@ -122,7 +122,7 @@ int response_writer_thr(void* response_writer_context) {
         }
         Request_block_t* rb = &rq->queue[curr_index];
         while (!rb->request_ready) {
-            if (request_queue_manager_finished && !rq->queue[curr_index].request_ready) {
+            if (s_request_queue_manager_finished && !rq->queue[curr_index].request_ready) {
                 goto cleanup;
             }
             cnd_wait(&rb->cnd_request_ready, &rq->mtx);
@@ -166,7 +166,7 @@ int response_writer_thr(void* response_writer_context) {
         //Wake next writer if ready and queue manager if queue was full
         cnd_signal(&rq->queue[rq->front].cnd_is_front);
         cnd_signal(&rq->cnd_is_nonfull);
-        if (request_queue_manager_finished && !rq->queue[curr_index].request_ready) {
+        if (s_request_queue_manager_finished && !rq->queue[curr_index].request_ready) {
             goto cleanup;
         }
         mtx_unlock(&rq->mtx);
@@ -175,8 +175,8 @@ int response_writer_thr(void* response_writer_context) {
     //Cleanup
 cleanup:
     free(response_writer_context);
-    workers_finished += 1;
-    cnd_signal(&cnd_worker_finished);
+    g_workers_finished += 1;
+    cnd_signal(&g_cnd_worker_finished);
     mtx_unlock(&rq->mtx);
     thrd_exit(0);
 }
@@ -245,7 +245,7 @@ void request_queue_manager(Request_queue_t* rq, Tcp_connection_t tcp_con) {
         LOG(ERROR, "mtx_lock failed!");
         exit(1);
     }
-    request_queue_manager_finished = 1;
+    s_request_queue_manager_finished = 1;
     for (int i = 0; i < REQUEST_QUEUE_CAPACITY; ++i) {
         cnd_signal(&rq->queue[i].cnd_request_ready);
     }
