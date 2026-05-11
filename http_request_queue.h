@@ -10,7 +10,7 @@
 #define REQUEST_QUEUE_CAPACITY 256
 
 typedef struct Request_block_t {
-    Http_message_t* req;
+    Http_message_t req;
     Http_status_t status;
     int request_ready;
 

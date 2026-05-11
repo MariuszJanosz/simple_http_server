@@ -70,10 +70,9 @@ void http_get_handler(Http_message_t* req, Http_message_t* res, Http_status_t* s
             }
             break;
     }
-    char status_char[4];
-    sprintf(status_char, "%d", *status);
     write_response_status_line(res, "HTTP/1.1",
-            status_char, (char*)http_status_to_string(*status));
+            (const char*)http_status_to_string_num(*status),
+            (const char*)http_status_to_string(*status));
     if (body_len) {
         sprintf(size, "%zu", body_len);
         write_response_field_line(res, "Content-length", size);
@@ -84,58 +83,51 @@ void http_get_handler(Http_message_t* req, Http_message_t* res, Http_status_t* s
 //TODO
 void http_post_handler(Http_message_t* req, Http_message_t* res, Http_status_t* status) {
     *status = HTTP_STATUS_NOT_IMPLEMENTED;
-    char status_char[4];
-    sprintf(status_char, "%d", *status);
     write_response_status_line(res, "HTTP/1.1",
-            status_char, (char*)http_status_to_string(*status));
+            (const char*)http_status_to_string_num(*status),
+            (const char*)http_status_to_string(*status));
 }
 
 void http_put_handler(Http_message_t* req, Http_message_t* res, Http_status_t* status) {
     *status = HTTP_STATUS_NOT_IMPLEMENTED;
-    char status_char[4];
-    sprintf(status_char, "%d", *status);
     write_response_status_line(res, "HTTP/1.1",
-            status_char, (char*)http_status_to_string(*status));
+            (const char*)http_status_to_string_num(*status),
+            (const char*)http_status_to_string(*status));
 }
 
 void http_delete_handler(Http_message_t* req, Http_message_t* res, Http_status_t* status) {
     *status = HTTP_STATUS_NOT_IMPLEMENTED;
-    char status_char[4];
-    sprintf(status_char, "%d", *status);
     write_response_status_line(res, "HTTP/1.1",
-            status_char, (char*)http_status_to_string(*status));
+            (const char*)http_status_to_string_num(*status),
+            (const char*)http_status_to_string(*status));
 }
 
 void http_head_handler(Http_message_t* req, Http_message_t* res, Http_status_t* status) {
     *status = HTTP_STATUS_NOT_IMPLEMENTED;
-    char status_char[4];
-    sprintf(status_char, "%d", *status);
     write_response_status_line(res, "HTTP/1.1",
-            status_char, (char*)http_status_to_string(*status));
+            (const char*)http_status_to_string_num(*status),
+            (const char*)http_status_to_string(*status));
 }
 
 void http_options_handler(Http_message_t* req, Http_message_t* res, Http_status_t* status) {
     *status = HTTP_STATUS_NOT_IMPLEMENTED;
-    char status_char[4];
-    sprintf(status_char, "%d", *status);
     write_response_status_line(res, "HTTP/1.1",
-            status_char, (char*)http_status_to_string(*status));
+            (const char*)http_status_to_string_num(*status),
+            (const char*)http_status_to_string(*status));
 }
 
 void http_patch_handler(Http_message_t* req, Http_message_t* res, Http_status_t* status) {
     *status = HTTP_STATUS_NOT_IMPLEMENTED;
-    char status_char[4];
-    sprintf(status_char, "%d", *status);
     write_response_status_line(res, "HTTP/1.1",
-            status_char, (char*)http_status_to_string(*status));
+            (const char*)http_status_to_string_num(*status),
+            (const char*)http_status_to_string(*status));
 }
 
 void http_unknown_method_handler(Http_message_t* req, Http_message_t* res, Http_status_t* status) {
     *status = HTTP_STATUS_NOT_IMPLEMENTED;
-    char status_char[4];
-    sprintf(status_char, "%d", *status);
     write_response_status_line(res, "HTTP/1.1",
-            status_char, (char*)http_status_to_string(*status));
+            (const char*)http_status_to_string_num(*status),
+            (const char*)http_status_to_string(*status));
 }
 
 void handle_http_request(Http_message_t* req, Http_message_t* res, Http_status_t* status) {

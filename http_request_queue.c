@@ -71,11 +71,6 @@ void echo_response(Http_message_t* res) {
 void init_request_queue(Request_queue_t* rq) {
     for (int i = 0; i < REQUEST_QUEUE_CAPACITY; ++i) {
         Request_block_t* rb = &rq->queue[i];
-        rb->req = malloc(sizeof(*rb->req));
-        if (!rb->req) {
-            LOG(ERROR, "malloc failed!");
-            exit(1);
-        }
         rb->request_ready = 0;
         if (cnd_init(&rb->cnd_request_ready) != thrd_success) {
             LOG(ERROR, "cnd_init failed!");
@@ -103,7 +98,6 @@ void init_request_queue(Request_queue_t* rq) {
 void free_request_queue(Request_queue_t* rq) {
     for (int i = 0; i < REQUEST_QUEUE_CAPACITY; ++i) {
         Request_block_t* rb = &rq->queue[i];
-        free(rb->req);
         cnd_destroy(&rb->cnd_request_ready);
         cnd_destroy(&rb->cnd_is_front);
     }
@@ -134,7 +128,7 @@ int response_writer_thr(void* response_writer_context) {
             cnd_wait(&rb->cnd_request_ready, &rq->mtx);
         }
         rb->request_ready = 0;
-        Http_message_t *req = rb->req;
+        Http_message_t *req = &rb->req;
         Http_status_t status = rb->status;
         mtx_unlock(&rq->mtx);
 
@@ -205,7 +199,7 @@ void init_writers(Request_queue_t* rq, int number_of_workers, Tcp_connection_t t
 void request_queue_manager(Request_queue_t* rq, Tcp_connection_t tcp_con) {
     while (!is_reading_finished(tcp_con)) {
         //prepare next request
-        Http_message_t* req = rq->queue[(rq->rear + 1) % REQUEST_QUEUE_CAPACITY].req;
+        Http_message_t* req = &rq->queue[(rq->rear + 1) % REQUEST_QUEUE_CAPACITY].req;
         init_http_message(req, HTTP_REQUEST);
         Http_status_t status = parse_http_request(req, tcp_con);
         

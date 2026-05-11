@@ -33,21 +33,6 @@ void free_http_message(Http_message_t* http_msg) {
             if (rl->request_target) {
                 free(rl->request_target);
             }
-            if (rl->http_version) {
-                free(rl->http_version);
-            }
-        }
-        else {
-            Status_line_t* sl = http_msg->start_line;
-            if (sl->http_version) {
-                free(sl->http_version);
-            }
-            if (sl->status_code) {
-                free(sl->status_code);
-            }
-            if (sl->status_text) {
-                free(sl->status_text);
-            }
         }
         free(http_msg->start_line);
     }
@@ -230,13 +215,14 @@ again:
     if (l > 0 && http_version[l - 1] == '\r') {
         http_version[l - 1] = '\0';
     }
-    rl.http_version = strdup(http_version);
-    if (!is_valid_http_version(rl.http_version)) {
+    if (!is_valid_http_version(http_version)) {
         LOG(INFO, "Invalid http version!");
         free(input);
         free(rl.request_target);
-        free(rl.http_version);
         return HTTP_STATUS_HTTP_VERSION_NOT_SUPPORTED;
+    }
+    else {
+        rl.http_version = "HTTP/1.1";
     }
     free(input);
     http_msg->start_line = (Request_line_t*)malloc(sizeof(rl));
@@ -748,15 +734,148 @@ const char* http_status_to_string(Http_status_t status) {
     }
 }
 
-void write_response_status_line(Http_message_t* http_msg, char* http_version, char* status, char* reason) {
+const char* http_status_to_string_num(Http_status_t status) {
+    switch (status) {
+        case HTTP_STATUS_CONTINUE:
+            return "100";
+        case HTTP_STATUS_SWITCHING_PROTOCOLS:
+            return "101";
+        case HTTP_STATUS_PROCESSING:
+            return "102";
+        case HTTP_STATUS_EARLY_HINTS:
+            return "103";
+        case HTTP_STATUS_OK:
+            return "200";
+        case HTTP_STATUS_CREATED:
+            return "201";
+        case HTTP_STATUS_ACCEPTED:
+            return "202";
+        case HTTP_STATUS_NON_AUTHORITATIVE_INFORMATION:
+            return "203";
+        case HTTP_STATUS_NO_CONTENT:
+            return "204";
+        case HTTP_STATUS_RESET_CONTENT:
+            return "205";
+        case HTTP_STATUS_PARTIAL_CONTENT:
+            return "206";
+        case HTTP_STATUS_MULTI_STATUS:
+            return "207";
+        case HTTP_STATUS_ALREADY_REPORTED:
+            return "208";
+        case HTTP_STATUS_IM_USED:
+            return "226";
+        case HTTP_STATUS_MULTIPLE_CHOICES:
+            return "300";
+        case HTTP_STATUS_MOVED_PERMANENTLY:
+            return "301";
+        case HTTP_STATUS_FOUND:
+            return "302";
+        case HTTP_STATUS_SEE_OTHER:
+            return "303";
+        case HTTP_STATUS_NOT_MODIFIED:
+            return "304";
+        case HTTP_STATUS_USE_PROXY:
+            return "305";
+        case HTTP_STATUS_UNUSED:
+            return "306";
+        case HTTP_STATUS_TEMPORARY_REDIRECT:
+            return "307";
+        case HTTP_STATUS_PERMANENT_REDIRECT:
+            return "308";
+        case HTTP_STATUS_BAD_REQUEST:
+            return "400";
+        case HTTP_STATUS_UNAUTHORIZED:
+            return "401";
+        case HTTP_STATUS_PAYMENT_REQUIRED:
+            return "402";
+        case HTTP_STATUS_FORBIDDEN:
+            return "403";
+        case HTTP_STATUS_NOT_FOUND:
+            return "404";
+        case HTTP_STATUS_METHOD_NOT_ALLOWED:
+            return "405";
+        case HTTP_STATUS_NOT_ACCEPTABLE:
+            return "406";
+        case HTTP_STATUS_PROXY_AUTHENTICATION_REQUIRED:
+            return "407";
+        case HTTP_STATUS_REQUEST_TIMEOUT:
+            return "408";
+        case HTTP_STATUS_CONFLICT:
+            return "409";
+        case HTTP_STATUS_GONE:
+            return "410";
+        case HTTP_STATUS_LENGTH_REQUIRED:
+            return "411";
+        case HTTP_STATUS_PRECONDITION_FAILED:
+            return "412";
+        case HTTP_STATUS_PAYLOAD_TOO_LARGE:
+            return "413";
+        case HTTP_STATUS_URI_TOO_LONG:
+            return "414";
+        case HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE:
+            return "415";
+        case HTTP_STATUS_RANGE_NOT_SATISFIABLE:
+            return "416";
+        case HTTP_STATUS_EXPECTATION_FAILED:
+            return "417";
+        case HTTP_STATUS_I_M_A_TEAPOT:
+            return "418";
+        case HTTP_STATUS_MISDIRECTED_REQUEST:
+            return "421";
+        case HTTP_STATUS_UNPROCESSABLE_ENTITY:
+            return "422";
+        case HTTP_STATUS_LOCKED:
+            return "423";
+        case HTTP_STATUS_FAILED_DEPENDANCY:
+            return "424";
+        case HTTP_STATUS_TOO_EARLY:
+            return "425";
+        case HTTP_STATUS_UPGRADE_REQUIRED:
+            return "426";
+        case HTTP_STATUS_PRECONDITION_REQUIRED:
+            return "428";
+        case HTTP_STATUS_TOO_MANY_REQUESTS:
+            return "429";
+        case HTTP_STATUS_REQUEST_HEADER_FIELDS_TOO_LARGE:
+            return "431";
+        case HTTP_STATUS_UNAVAILABLE_FOR_LEGAL_REASONS:
+            return "451";
+        case HTTP_STATUS_INTERNAL_SERVER_ERROR:
+            return "500";
+        case HTTP_STATUS_NOT_IMPLEMENTED:
+            return "501";
+        case HTTP_STATUS_BAD_GATEWAY:
+            return "502";
+        case HTTP_STATUS_SERVICE_UNAVAILABLE:
+            return "503";
+        case HTTP_STATUS_GATEWAY_TIMEOUT:
+            return "504";
+        case HTTP_STATUS_HTTP_VERSION_NOT_SUPPORTED:
+            return "505";
+        case HTTP_STATUS_VARIANT_ALSO_NEGOTIATES:
+            return "506";
+        case HTTP_STATUS_INSUFFICIENT_STORAGE:
+            return "507";
+        case HTTP_STATUS_LOOP_DETECTED:
+            return "508";
+        case HTTP_STATUS_NOT_EXTENDED:
+            return "510";
+        case HTTP_STATUS_NETWORK_AUTHENTICATION_REQUIRED:
+            return "511";
+        default:
+            return "500";
+    }
+}
+
+void write_response_status_line(Http_message_t* http_msg, const char* http_version, const char* status, const char* reason) {
     http_msg->start_line = malloc(sizeof(Status_line_t));
     if (!(http_msg->start_line)) {
         LOG(ERROR, "malloc failed!");
         exit(1);
     }
-    ((Status_line_t*)(http_msg->start_line))->http_version = strdup(http_version);
-    ((Status_line_t*)(http_msg->start_line))->status_code = strdup(status);
-    ((Status_line_t*)(http_msg->start_line))->status_text = strdup(reason);
+    ((Status_line_t*)(http_msg->start_line))->http_version = http_version;
+    ((Status_line_t*)(http_msg->start_line))->status_code = status;
+    ((Status_line_t*)(http_msg->start_line))->status_text = reason;
 }
 
 void write_response_field_line(Http_message_t* http_msg, char* field_name, char* field_value) {

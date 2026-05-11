@@ -98,13 +98,13 @@ typedef enum {
 typedef struct {
     Method_t method;
     char* request_target;
-    char* http_version;
+    const char* http_version;
 } Request_line_t;
 
 typedef struct {
-    char* http_version;
-    char* status_code;
-    char* status_text;
+    const char* http_version;
+    const char* status_code;
+    const char* status_text;
 } Status_line_t;
 
 typedef struct {
@@ -132,7 +132,7 @@ Http_status_t parse_request_line(Http_message_t* http_msg, Tcp_connection_t tcp_
 Http_status_t parse_field_line(Http_message_t* http_msg, Tcp_connection_t tcp_con, int *is_empty);
 Http_status_t read_body(Http_message_t* http_msg, Tcp_connection_t tcp_con);
 Http_status_t parse_http_request(Http_message_t* http_msg, Tcp_connection_t tcp_con);
-void write_response_status_line(Http_message_t* http_msg, char* http_version, char* status, char* reason);
+void write_response_status_line(Http_message_t* http_msg, const char* http_version, const char* status, const char* reason);
 void write_response_field_line(Http_message_t* http_msg, char* field_name, char* field_value);
 void write_response_body_content_length(Http_message_t* http_msg, char* body, size_t content_length);
 void send_response(Tcp_connection_t tcp_con, Http_message_t* http_msg);
@@ -141,6 +141,7 @@ void default_chunker(int fd, char* chunk, size_t* bytes_read, int* finished);
 
 const char* http_method_to_string(Method_t method);
 const char* http_status_to_string(Http_status_t status);
+const char* http_status_to_string_num(Http_status_t status);
 
 int has_field(Http_message_t* http_msg, char* field_name, int* out_index);
 
