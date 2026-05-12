@@ -8,6 +8,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <inttypes.h>
+#include <assert.h>
 
 #include <unistd.h>
 
@@ -24,6 +25,7 @@ void init_http_message(Http_message_t* http_msg, Message_type_t type) {
     }
     http_msg->message_body = NULL;
     http_msg->body_size = 0;
+    http_msg->body_fd = -1;
 }
 
 void free_http_message(Http_message_t* http_msg) {
@@ -919,6 +921,18 @@ size_t get_response_size(Http_message_t* http_msg) {
     return msg_size;
 }
 
+void send_buf(int fd, char* buf, size_t size) {
+    size_t n = 0;
+    while (n < size) {
+        ssize_t tmp = write(fd, buf + n, size - n);
+        if (tmp < 0) {
+            LOG(INFO, "write failed!");
+            break;
+        }
+        n += tmp;
+    }
+}
+
 void send_response(Tcp_connection_t tcp_con, Http_message_t* http_msg) {
     size_t msg_size = get_response_size(http_msg);
     if (msg_size == 0) {
@@ -952,23 +966,41 @@ void send_response(Tcp_connection_t tcp_con, Http_message_t* http_msg) {
         LOG(ERROR, "Faild to prepare message!");
         exit(1);
     }
-    size_t n = 0;
-    while (n < count) {
-        ssize_t tmp = write(tcp_con.fd, response + n, count - n);
-        if (tmp < 0) {
-           LOG(INFO, "write failed!");
-           break;
-        }
-        n += tmp;
-    }
+    send_buf(tcp_con.fd, response, count);
     free(response);
 }
 
 void send_response_chunked(Tcp_connection_t tcp_con, Http_message_t* http_msg, int fd, Chunker_func_t chunker) {
-
+    assert(http_msg->message_body == NULL && "message_body not NULL in send_response_chunked!");
+    send_response(tcp_con, http_msg); //Send header
+    char chunk[DEFAULT_CHUNK_SIZE + 16]; //+16 additional space for size and 2x\r\n
+    size_t chunk_size;
+    while (chunk_size = chunker(fd, chunk + 14)) {
+        chunk[14 + chunk_size] = '\r';
+        chunk[14 + chunk_size + 1] = '\n';
+        chunk[13] = '\n';
+        chunk[12] = '\r';
+        int i = 12;
+        size_t cs = chunk_size;
+        static const char* digit_lookup = "0123456789ABCDEF";
+        while (cs) {
+            --i;
+            assert(i >= 0 && "chunk too big!");
+            chunk[i] = digit_lookup[cs % 16];
+            cs /= 16;
+        }
+        send_buf(tcp_con.fd, chunk + i, chunk_size + 16 - i);
+    }
+    //EOF send closing chunk
+    send_buf(tcp_con.fd, "0\r\n\r\n", strlen("0\r\n\r\n"));
 }
 
-void default_chunker(int fd, char* chunk, size_t* bytes_read, int* finished) {
-
+size_t default_chunker(int fd, char* chunk) {
+    ssize_t bytes_read = read(fd, chunk, DEFAULT_CHUNK_SIZE);
+    if (bytes_read < 0) {
+        LOG(ERROR, "read failed!");
+        exit(1);
+    }
+    return bytes_read;
 }
 

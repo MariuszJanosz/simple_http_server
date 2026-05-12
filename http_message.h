@@ -120,9 +120,10 @@ typedef struct Http_message_t {
     int field_lines_capacity;
     char* message_body;
     size_t body_size;
+    int body_fd;
 } Http_message_t;
 
-typedef void (*Chunker_func_t)(int fd, char* chunk, size_t* bytes_read, int* finished);
+typedef size_t (*Chunker_func_t)(int fd, char* chunk);
 
 #define DEFAULT_CHUNK_SIZE 1024
 
@@ -137,7 +138,7 @@ void write_response_field_line(Http_message_t* http_msg, char* field_name, char*
 void write_response_body_content_length(Http_message_t* http_msg, char* body, size_t content_length);
 void send_response(Tcp_connection_t tcp_con, Http_message_t* http_msg);
 void send_response_chunked(Tcp_connection_t tcp_con, Http_message_t* http_msg, int fd, Chunker_func_t chunker);
-void default_chunker(int fd, char* chunk, size_t* bytes_read, int* finished);
+size_t default_chunker(int fd, char* chunk);
 
 const char* http_method_to_string(Method_t method);
 const char* http_status_to_string(Http_status_t status);
