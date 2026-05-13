@@ -10,4 +10,13 @@
       </video>
     </div>
   </body>
+  <script defer>
+    const video = document.querySelector("video");
+    document.addEventListener("pointerdown", async () => {
+      await video.play();
+    });
+    document.addEventListener("keydown", async () => {
+      await video.play();
+    });
+  </script>
 </html>
