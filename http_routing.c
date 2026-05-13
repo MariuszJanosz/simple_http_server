@@ -17,6 +17,16 @@ Http_status_t route_http_request(Http_message_t* req, char* route) {
             strcmp(req_tar, "/index.html") == 0) {
         target = "/index.html";
     }
+    else if (   strcmp(req_tar, "/chunked") == 0 ||
+                strcmp(req_tar, "/chunked.html") == 0) {
+        target = "/chunked.html";
+    }
+    else if (strcmp(req_tar, "/nggyu") == 0) {
+        target = "/nggyu.html";
+    }
+    else if (strcmp(req_tar, "/nggyu.mp4") == 0) {
+        target = "/nggyu.mp4";
+    }
     else {
         target = "/404.html";
         res = HTTP_STATUS_NOT_FOUND;

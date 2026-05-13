@@ -135,7 +135,7 @@ int response_writer_thr(void* response_writer_context) {
         //Prepare response
         Http_message_t res;
         init_http_message(&res, HTTP_RESPONSE);
-        handle_http_request(req, &res, &status);
+        Response_method_t rm = handle_http_request(req, &res, &status);
         
         //Wait until it is this response turn
         if (mtx_lock(&rq->mtx) == thrd_error) {
@@ -147,7 +147,18 @@ int response_writer_thr(void* response_writer_context) {
         }
 
         //Send response
-        send_response(tcp_con, &res);
+        switch (rm) {
+            case RESPONSE_NO_BODY:
+            case RESPONSE_CONTENT_LENGTH:
+                send_response(tcp_con, &res);
+                break;
+            case RESPONSE_TRANSFER_ENCODING_CHUNKED:
+                send_response_chunked(tcp_con, &res, res.body_fd, default_chunker);
+                break;
+            case RESPONSE_ABORT:
+                LOG(ERROR, "rm == RESPONSE_ABORT");
+                exit(1);
+        }
 
         DEBUG(echo_response(&res));
 
