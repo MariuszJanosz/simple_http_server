@@ -210,8 +210,17 @@ void init_writers(Request_queue_t* rq, int number_of_workers, Tcp_connection_t t
 void request_queue_manager(Request_queue_t* rq, Tcp_connection_t tcp_con) {
     while (!is_reading_finished(tcp_con)) {
         //prepare next request
+        if (mtx_lock(&rq->mtx) == thrd_error) {
+            LOG(ERROR, "mtx_lock failed!");
+            exit(1);
+        }
+        while (!rq->is_nonfull) {
+            cnd_wait(&rq->cnd_is_nonfull, &rq->mtx);
+        }
         Http_message_t* req = &rq->queue[(rq->rear + 1) % REQUEST_QUEUE_CAPACITY].req;
         init_http_message(req, HTTP_REQUEST);
+        mtx_unlock(&rq->mtx);
+        
         Http_status_t status = parse_http_request(req, tcp_con);
         
         DEBUG(echo_request(req));
@@ -229,16 +238,10 @@ void request_queue_manager(Request_queue_t* rq, Tcp_connection_t tcp_con) {
             break;
         }
 
-        while (!rq->is_nonfull) {
-            cnd_wait(&rq->cnd_is_nonfull, &rq->mtx);
-        }
         rq->rear += 1;
         rq->rear %= REQUEST_QUEUE_CAPACITY;
         if ((rq->rear + 1) % REQUEST_QUEUE_CAPACITY == rq->front) {
             rq->is_nonfull = 0;
-            while (!rq->is_nonfull) {
-                cnd_wait(&rq->cnd_is_nonfull, &rq->mtx);
-            }
         }
         Request_block_t* rb = &rq->queue[rq->rear];
         rb->status = status;
