@@ -4,6 +4,7 @@
 #include "uri.h"
 #include "abnf.h"
 #include "tcp_connection.h"
+#include "http_field_line.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -15,14 +16,7 @@
 void init_http_message(Http_message_t* http_msg, Message_type_t type) {
     http_msg->message_type = type;
     http_msg->start_line = NULL;
-    http_msg->field_lines_count = 0;
-    http_msg->field_lines_capacity = 8;
-    http_msg->field_lines = malloc(http_msg->field_lines_capacity *
-            sizeof(*http_msg->field_lines));
-    if (!http_msg->field_lines) {
-        LOG(ERROR, "malloc failed!");
-        exit(1);
-    }
+    init_field_line_hash_map(&http_msg->field_line_hash_map, 32);
     http_msg->message_body = NULL;
     http_msg->body_size = 0;
     http_msg->body_fd = -1;
@@ -38,11 +32,7 @@ void free_http_message(Http_message_t* http_msg) {
         }
         free(http_msg->start_line);
     }
-    for (int i = 0; i < http_msg->field_lines_count; ++i) {
-        free(http_msg->field_lines[i].field_name);
-        free(http_msg->field_lines[i].field_value);
-    }
-    free(http_msg->field_lines);
+    free_field_line_hash_map(&http_msg->field_line_hash_map);
     if (http_msg->message_body) {
         free(http_msg->message_body);
     }
@@ -266,7 +256,7 @@ Http_status_t parse_field_line(Http_message_t* http_msg, Tcp_connection_t tcp_co
         return HTTP_STATUS_BAD_REQUEST;
     }
     Field_line_t fl;
-    fl.field_name = strdup(name);
+    fl.field_name = name;
     if (!is_valid_field_name(fl.field_name)) {
         LOG(INFO, "Invalid field name!");
         free(input);
@@ -282,7 +272,7 @@ Http_status_t parse_field_line(Http_message_t* http_msg, Tcp_connection_t tcp_co
     while (*tmp == ' ') {
         tmp += 1;
     }
-    fl.field_value = strdup(tmp);
+    fl.field_value = tmp;
     if (!is_valid_field_value(fl.field_value)) {
         LOG(INFO, "Invalid field value!");
         free(input);
@@ -290,19 +280,8 @@ Http_status_t parse_field_line(Http_message_t* http_msg, Tcp_connection_t tcp_co
         free(fl.field_value);
         return HTTP_STATUS_BAD_REQUEST;
     }
+    add_field_line_to_hash_map(&http_msg->field_line_hash_map, fl);
     free(input);
-    if (http_msg->field_lines_count == http_msg->field_lines_capacity) {
-        http_msg->field_lines_capacity *= 2;
-        Field_line_t* tmp = realloc(http_msg->field_lines, http_msg->field_lines_capacity *
-                sizeof(*http_msg->field_lines));
-        if (!tmp) {
-            LOG(ERROR, "realloc failed!");
-            exit(1);
-        }
-        http_msg->field_lines = tmp;
-    }
-    memcpy(&http_msg->field_lines[http_msg->field_lines_count], &fl, sizeof(fl));
-    http_msg->field_lines_count += 1;
     return HTTP_STATUS_OK;
 }
 
@@ -411,45 +390,20 @@ Http_status_t read_body_chunked(Http_message_t* http_msg, Tcp_connection_t tcp_c
     return HTTP_STATUS_OK;
 }
 
-int has_field(Http_message_t* http_msg, char* field_name, int* out_index) {
-    int i;
-    for (i = 0; i < http_msg->field_lines_count; ++i) {
-        char *name = http_msg->field_lines[i].field_name;
-        int j = 0;
-        while (name[j] != '\0' && field_name[j] != '\0') {
-            if (tolower(name[j]) == tolower(field_name[j])) {
-                j += 1;
-            }
-            else {
-                break;
-            }
-        }
-        if (name[j] == '\0' && field_name[j] == '\0') {
-            break;
-        }
-    }
-    if (i == http_msg->field_lines_count) {
-        return 0;
-    }
-    if (out_index) {
-        *out_index = i;
-    }
-    return 1;
-}
-
 //For now it works only for requests like Transfer-Encoding: chunked but not for Transfer-Encoding:gzip,chunked
 Http_status_t read_body(Http_message_t* http_msg, Tcp_connection_t tcp_con) {
-    int transfer_encoding_index = -1;
-    if (has_field(http_msg, "Transfer-Encoding", &transfer_encoding_index)) {
-        char* transfer_encoding_val =
-                    http_msg->field_lines[transfer_encoding_index].field_value;
+    Field_line_t* TEFL =
+        find_field_line_in_hash_map(&http_msg->field_line_hash_map, "Transfer-Encoding");
+    if (TEFL) {
+        char* transfer_encoding_val = TEFL->field_value;
         if (strcmp(transfer_encoding_val, "chunked") == 0) {
             return read_body_chunked(http_msg, tcp_con);
         }
     }
-    int content_length_index = -1;
-    if (has_field(http_msg, "Content-Length", &content_length_index)) {
-        char* str = http_msg->field_lines[content_length_index].field_value;
+    Field_line_t* CLFL =
+        find_field_line_in_hash_map(&http_msg->field_line_hash_map, "Content-Length");
+    if (CLFL) {
+        char* str = CLFL->field_value;
         if (!abnf_is_DIGIT(str[0])) {
             return HTTP_STATUS_BAD_REQUEST;
         }
@@ -469,38 +423,12 @@ Http_status_t read_body(Http_message_t* http_msg, Tcp_connection_t tcp_con) {
 }
 
 Http_status_t host_field_matches_request_target(Http_message_t* http_msg) {
-    int host_field_index;
-    int has_host_field = has_field(http_msg, "Host", &host_field_index);
-    //Two host lines are also bad request
-    if (has_host_field) {
-        int second_host_field_index = host_field_index + 1;
-        while (second_host_field_index < http_msg->field_lines_count) {
-            char* name = http_msg->field_lines[second_host_field_index].field_name;
-            char field_name[] = "Host";
-            int j = 0;
-            while (name[j] != '\0' && field_name[j] != '\0') {
-                if (tolower(name[j]) == tolower(field_name[j])) {
-                    j += 1;
-                }
-                else {
-                    break;
-                }
-            }
-            if (name[j] == '\0' && field_name[j] == '\0') {
-                break;
-            }
-            second_host_field_index += 1;
-        }
-        if (second_host_field_index < http_msg->field_lines_count) {
-            return HTTP_STATUS_BAD_REQUEST;
-        }
-    }
-    
-    if (!has_host_field) { //Host is required
+    Field_line_t* HFL = find_field_line_in_hash_map(&http_msg->field_line_hash_map, "Host");
+    if (!HFL) { //Host is required
         return HTTP_STATUS_BAD_REQUEST;
     }
     else {
-        char* host_value = http_msg->field_lines[host_field_index].field_value;
+        char* host_value = HFL->field_value;
         char* request_target = ((Request_line_t*)(http_msg->start_line))->request_target;
         if (is_valid_authority_form(request_target)) {
             int i = 0;
@@ -884,18 +812,8 @@ void write_response_status_line(Http_message_t* http_msg, const char* http_versi
 }
 
 void write_response_field_line(Http_message_t* http_msg, char* field_name, char* field_value) {
-    if (http_msg->field_lines_count == http_msg->field_lines_capacity) {
-        http_msg->field_lines_capacity *= 2;
-        Field_line_t* tmp = realloc(http_msg->field_lines, http_msg->field_lines_capacity * sizeof(*tmp));
-        if (!tmp) {
-            LOG(ERROR, "realloc failed!");
-            exit(1);
-        }
-        http_msg->field_lines = tmp;
-    }
-    http_msg->field_lines[http_msg->field_lines_count].field_name = strdup(field_name);
-    http_msg->field_lines[http_msg->field_lines_count].field_value = strdup(field_value);
-    http_msg->field_lines_count += 1;
+    const Field_line_t fl = {field_name, field_value};
+    add_field_line_to_hash_map(&http_msg->field_line_hash_map, fl);
 }
 
 void write_response_body_content_length(Http_message_t* http_msg, char* body, size_t content_length) {
@@ -911,10 +829,11 @@ size_t get_response_size(Http_message_t* http_msg) {
     msg_size += 1;//" "
     msg_size += strlen(((Status_line_t*)(http_msg->start_line))->status_text);
     msg_size += 2;//CRLF
-    for (int i = 0; i < http_msg->field_lines_count; ++i) {
-        msg_size += strlen(http_msg->field_lines[i].field_name);
+    for (int i = 0; i < http_msg->field_line_hash_map.capacity; ++i) {
+        if (http_msg->field_line_hash_map.buckets[i].bucket_status != OCCUPIED) continue;
+        msg_size += strlen(http_msg->field_line_hash_map.buckets[i].field_line.field_name);
         msg_size += 1;//":"
-        msg_size += strlen(http_msg->field_lines[i].field_value);
+        msg_size += strlen(http_msg->field_line_hash_map.buckets[i].field_line.field_value);
         msg_size += 2;//CRLF
     }
     msg_size += 2;//CRLF
@@ -953,10 +872,11 @@ void send_response(Tcp_connection_t tcp_con, Http_message_t* http_msg) {
                 ((Status_line_t*)(http_msg->start_line))->status_code,
                 ((Status_line_t*)(http_msg->start_line))->status_text);
     //Prepare field lines
-    for (int i = 0; i < http_msg->field_lines_count; ++i) {
+    for (int i = 0; i < http_msg->field_line_hash_map.capacity; ++i) {
+        if (http_msg->field_line_hash_map.buckets[i].bucket_status != OCCUPIED) continue;
         count += sprintf(response + count, "%s:%s\r\n",
-                http_msg->field_lines[i].field_name,
-                http_msg->field_lines[i].field_value);
+                http_msg->field_line_hash_map.buckets[i].field_line.field_name,
+                http_msg->field_line_hash_map.buckets[i].field_line.field_value);
     }
     //CRLF
     count += sprintf(response + count, "\r\n");

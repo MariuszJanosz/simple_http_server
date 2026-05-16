@@ -3,6 +3,7 @@
 
 #include "reader.h"
 #include "tcp_connection.h"
+#include "http_field_line.h"
 
 #include <stddef.h>
 
@@ -107,17 +108,10 @@ typedef struct {
     const char* status_text;
 } Status_line_t;
 
-typedef struct {
-    char* field_name;
-    char* field_value;
-} Field_line_t;
-
 typedef struct Http_message_t {
     Message_type_t message_type;
     void* start_line; //request=(Request_line_t*), response=(Status_line_t*)
-    Field_line_t* field_lines;
-    int field_lines_count;
-    int field_lines_capacity;
+    Field_line_hash_map_t field_line_hash_map;
     char* message_body;
     size_t body_size;
     int body_fd;

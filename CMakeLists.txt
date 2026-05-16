@@ -16,7 +16,8 @@ target_sources(simple_http_server PRIVATE	simple_http_server.c
 						uri.c			uri.h
 						http_routing.c		http_routing.h
 						http_request_queue.c	http_request_queue.h
-						http_request_handler.c	http_request_handler.h)
+						http_request_handler.c	http_request_handler.h
+						http_field_line.c	http_field_line.h)
 
 install(TARGETS simple_http_server RUNTIME)
 

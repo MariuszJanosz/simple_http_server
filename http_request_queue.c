@@ -4,6 +4,7 @@
 #include "http_message.h"
 #include "reader.h"
 #include "http_request_handler.h"
+#include "http_field_line.h"
 
 #include <threads.h>
 #include <stdlib.h>
@@ -28,8 +29,11 @@ void echo_request(Http_message_t* req) {
         http_method_to_string(req_line->method),
         req_line->request_target,
         req_line->http_version);
-    for (int i = 0; i < req->field_lines_count; ++i) {
-        printf("%s: %s\n", req->field_lines[i].field_name, req->field_lines[i].field_value);
+    for (int i = 0; i < req->field_line_hash_map.capacity; ++i) {
+        if (req->field_line_hash_map.buckets[i].bucket_status != OCCUPIED) continue;
+        printf("%s: %s\n",
+                req->field_line_hash_map.buckets[i].field_line.field_name,
+                req->field_line_hash_map.buckets[i].field_line.field_value);
     }
     printf("\n");
     if (req->message_body) {
@@ -52,8 +56,11 @@ void echo_response(Http_message_t* res) {
         status_line->http_version,
         status_line->status_code,
         status_line->status_text);
-    for (int i = 0; i < res->field_lines_count; ++i) {
-        printf("%s: %s\n", res->field_lines[i].field_name, res->field_lines[i].field_value);
+    for (int i = 0; i < res->field_line_hash_map.capacity; ++i) {
+        if (res->field_line_hash_map.buckets[i].bucket_status != OCCUPIED) continue;
+        printf("%s: %s\n",
+                res->field_line_hash_map.buckets[i].field_line.field_name,
+                res->field_line_hash_map.buckets[i].field_line.field_value);
     }
     printf("\n");
     if (res->message_body) {

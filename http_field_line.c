@@ -3,11 +3,17 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 size_t prehash(const unsigned char* key) {
     size_t res = 0;
     while (*key) {
-        res = (res << (4 * sizeof(size_t)) + *key) ^ (res >> (4 * sizeof(size_t)));
+        //field line name is case-insensitive, make everything lowercase
+        res += tolower(*key);
+        for (int i = 0; i < 2 * sizeof(res); ++i) {
+            res = (res << 4 * i) + res + (res >> 4 * i);
+        }
+        res += tolower(*key);
         ++key;
     }
     return res;
