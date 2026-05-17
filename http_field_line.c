@@ -33,7 +33,10 @@ void free_field_line_hash_map(Field_line_hash_map_t* hm) {
     for (size_t i = 0; i < hm->capacity; ++i) {
         if (hm->buckets[i].bucket_status == OCCUPIED) {
             free(hm->buckets[i].field_line.field_name);
-            free(hm->buckets[i].field_line.field_value);
+            for (size_t j = 0; j < hm->buckets[i].field_line.count; ++j) {
+                free(hm->buckets[i].field_line.field_values[j]);
+            }
+            free(hm->buckets[i].field_line.field_values);
         }
     }
     free(hm->buckets);
@@ -44,7 +47,7 @@ ssize_t find_field_line_bucket_index(const Field_line_hash_map_t* hm, const char
     size_t res = start_index;
     do {
         if (hm->buckets[res].bucket_status == OCCUPIED &&
-                strcmp(hm->buckets[res].field_line.field_name, field_name) == 0) {
+                strcasecmp(hm->buckets[res].field_line.field_name, field_name) == 0) {
             return res;
         }
         ++res;
@@ -70,7 +73,7 @@ void grow_and_rehash(Field_line_hash_map_t* hm) {
     //Move elements to new_buckets array
     for (size_t i = 0; i < hm->capacity; ++i) {
         if (hm->buckets[i].bucket_status != OCCUPIED) continue;
-        size_t hash = prehash(hm->buckets[i].field_line.field_value) % new_capacity;
+        size_t hash = prehash(hm->buckets[i].field_line.field_name) % new_capacity;
         while (new_buckets[hash].bucket_status != EMPTY) {
             ++hash;
             hash %= new_capacity;
@@ -84,47 +87,51 @@ void grow_and_rehash(Field_line_hash_map_t* hm) {
     hm->capacity = new_capacity;
 }
 
-void add_field_line_to_hash_map(Field_line_hash_map_t* hm, const Field_line_t field_line) {
-    //If this key is already present append value after ','
-    ssize_t index = find_field_line_bucket_index(hm, field_line.field_name);
+void add_field_line_to_hash_map(Field_line_hash_map_t* hm, const char* field_name, const char* field_value) {
+    ssize_t index = find_field_line_bucket_index(hm, field_name);
     if (index >= 0) {
-        char* old_fv = hm->buckets[index].field_line.field_value;
-        //old_fv + ',' + field_line.field_value + '\0'
-        //new_fv_len + 1 ('\0') = old_fv_len + 1 + appended_fv_len + 1
-        size_t old_fv_len = strlen(old_fv);
-        size_t appended_fv_len = strlen(field_line.field_value);
-        char* new_fv = realloc(old_fv, old_fv_len + 1 + appended_fv_len + 1);
-        if (!new_fv) {
-            LOG(ERROR, "realloc failed!");
+        if (hm->buckets[index].field_line.count == hm->buckets[index].field_line.capacity) {
+            hm->buckets[index].field_line.capacity *= 2;
+            char** tmp = realloc(hm->buckets[index].field_line.field_values,
+                    hm->buckets[index].field_line.capacity * sizeof(*tmp));
+            if (!tmp) {
+                LOG(ERROR, "realloc failed!");
+                exit(1);
+            }
+            hm->buckets[index].field_line.field_values = tmp;
+        }
+        char* tmp = strdup(field_value);
+        if (!tmp) {
+            LOG(ERROR, "strdup failed!");
             exit(1);
         }
-        new_fv[old_fv_len] = ',';
-        new_fv[old_fv_len + 1] = '\0';
-        strcat(new_fv, field_line.field_value);
-        hm->buckets[index].field_line.field_value = new_fv;
+        hm->buckets[index].field_line.field_values[hm->buckets[index].field_line.count++] = tmp;
         return;
     }
 #define LOAD_FACTOR_REHASH_THRESHOLD 0.5f
     if ((float)(hm->occupied_count + 1) / hm->capacity > LOAD_FACTOR_REHASH_THRESHOLD)
         grow_and_rehash(hm);
-    size_t hash = prehash(field_line.field_name) % hm->capacity;
+    size_t hash = prehash(field_name) % hm->capacity;
     while (hm->buckets[hash].bucket_status == OCCUPIED) {
         ++hash;
         hash %= hm->capacity;
     }
     hm->buckets[hash].bucket_status = OCCUPIED;
-    char* s = strdup(field_line.field_name);
+    char* s = strdup(field_name);
     if (!s) {
         LOG(ERROR, "strdup failed!");
         exit(1);
     }
     hm->buckets[hash].field_line.field_name = s;
-    s = strdup(field_line.field_value);
+    hm->buckets[hash].field_line.field_values = malloc(sizeof(*hm->buckets[hash].field_line.field_values));
+    hm->buckets[hash].field_line.capacity = 1;
+    s = strdup(field_value);
     if (!s) {
         LOG(ERROR, "strdup failed!");
         exit(1);
     }
-    hm->buckets[hash].field_line.field_value = s;
+    hm->buckets[hash].field_line.field_values[0] = s;
+    hm->buckets[hash].field_line.count = 1;
     hm->occupied_count += 1;
 }
 
