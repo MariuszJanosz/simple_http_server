@@ -101,8 +101,82 @@ parse_next_field_line:
     goto parse_next_field_line;
 }
 
-Http_status_t parse_body(Http_request_t* req, Tcp_connection_t tcp_con) {
+Http_status_t parse_body_chunked(Http_request_t* req, Tcp_connection_t tcp_con) {
 
+}
+
+Http_status_t parse_body_cl(Http_request_t* req, Tcp_connection_t tcp_con, size_t content_length) {
+
+}
+
+Http_status_t parse_body(Http_request_t* req, Tcp_connection_t tcp_con) {
+    //Check if req has chunk encoded body
+    Field_line_t* transfer_encoding_fl = find_field_line_in_hash_map(&req->headers, "Transfer-Encoding");
+    if (transfer_encoding_fl) {
+        const char* chunked_str = "chunked";
+        size_t len = strlen(chunked_str);
+        for (int i = 0; i < transfer_encoding_fl->count; ++i) {
+            char* val = transfer_encoding_fl->field_values[i];
+            int pos = 0;
+            while (val[pos]) {
+                int j = 0;
+                for (; j < len; ++j) {
+                    if (val[pos + j] != chunked_str[j]) break;
+                }
+                if (j != len) {
+                    pos += j;
+                    while (val[pos] != ',' && val[pos] != '\0') ++pos;
+                    if (val[pos] == ',') ++pos;
+                }
+                else {
+                    pos += j;
+                    if (val[pos] == ',' || val[pos] == '\0') {
+                        //If "chunked" is the last value
+                        if (i + 1 == transfer_encoding_fl->count && val[pos] == '\0') {
+                            return parse_body_chunked(req, tcp_con);
+                        }
+                        //If "chunked" is not the last value connection is broken
+                        return PARING_BROKEN_CLOSE_CONNECTION;
+                    }
+                    else {
+                        while (val[pos] != ',' && val[pos] != '\0') ++pos;
+                        if (val[pos] == ',') ++pos;
+                    }
+                }
+            }
+        }
+    }
+    //Check if req has body with a given length
+    Field_line_t* content_length_fl = find_field_line_in_hash_map(&req->headers, "Content-Length");
+    if (content_length_fl) {
+        if (content_length_fl->count != 1) {
+            return PARING_BROKEN_CLOSE_CONNECTION;
+        }
+        char* ptr = content_length_fl->field_values[0];
+        while (isspace(*ptr)) ++ptr;
+        if (*ptr == '\0') return PARING_BROKEN_CLOSE_CONNECTION;
+        size_t content_length = 0;
+        do {
+            if ('0' <= *ptr && *ptr <= 9) {
+                content_length *= 10;
+                content_length += (*ptr - '0');
+                if (content_length > MAX_REQUEST_BODY_SIZE) {
+                    return PARING_BROKEN_CLOSE_CONNECTION;
+                }
+            }
+            else {
+                while (isspace(*ptr)) {
+                    ++ptr;
+                }
+                if (*ptr == '\0') --ptr;
+                else return PARING_BROKEN_CLOSE_CONNECTION;
+            }
+            ++ptr;
+        } while (*ptr != '\0');
+        return parse_body_cl(req, tcp_con, content_length);
+    }
+    //If we are here there is no body
+    return PARSING_FINE;
 }
 
 Http_status_t parse_trailers(Http_request_t* req, Tcp_connection_t tcp_con) {
