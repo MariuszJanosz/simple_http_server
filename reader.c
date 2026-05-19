@@ -45,6 +45,11 @@ size_t get_data(Tcp_connection_t tcp_con, char* output, size_t count) {
 }
 
 char* get_line(Tcp_connection_t tcp_con) {
+    static int recur_depth = 0;
+    ++recur_depth;
+#define MAX_RECUR_DEPTH 20
+    //This prevents the attack of sending infinite line that would cause stack overflow
+    if (recur_depth > MAX_RECUR_DEPTH) return NULL;
     if (stl_leftover_size > 0) {
         int i = 0;
         while (i < stl_leftover_size) {
@@ -63,6 +68,7 @@ char* get_line(Tcp_connection_t tcp_con) {
             res[i + 1] = '\0';
             stl_leftover_start_index += (i + 1);
             stl_leftover_size -= (i + 1);
+            --recur_depth;
             return res;
         }
         //There is no '\n'
@@ -76,8 +82,10 @@ char* get_line(Tcp_connection_t tcp_con) {
             res[stl_leftover_size] = '\0';
             stl_leftover_start_index = 0;
             stl_leftover_size = 0;
+            ++recur_depth;
             char* tail = get_line(tcp_con);
             if (!tail) { //EOF return whatever is already in res
+                --recur_depth;
                 return res;
             }
             size_t rsize = strlen(res);
@@ -90,14 +98,17 @@ char* get_line(Tcp_connection_t tcp_con) {
             res = tmp;
             memcpy(res + rsize, tail, tsize + 1);
             free(tail);
+            --recur_depth;
             return res;
         }
     }
     stl_leftover_size = try_get_data(tcp_con, stl_leftover, LEFTOVER_CAPACITY);
     //EOF detected return NULL
     if (stl_leftover_size == 0) {
+        --recur_depth;
         return NULL;
     }
+    --revur_depth;
     return get_line(tcp_con);
 }
 
