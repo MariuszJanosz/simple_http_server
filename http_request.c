@@ -46,6 +46,7 @@ const char* version_string_to_literal(const char* version) {
 }
 
 Http_status_t parse_request_line(Http_request_t* req, Tcp_connection_t tcp_con) {
+    Http_status_t res = PARSING_FINE;
     char* line = NULL;
     while (!line) {
         line = get_line(tcp_con);
@@ -62,13 +63,16 @@ Http_status_t parse_request_line(Http_request_t* req, Tcp_connection_t tcp_con) 
     char* leftover = strtok(NULL, " \r\n");
     req->request_line.method = method_string_to_literal(method);
     if (target) req->request_line.target = strdup(target);
-    else req->request_line.target = strdup("");
+    else {
+        res = HTTP_STATUS_BAD_REQUEST;
+        req->request_line.target = strdup("");
+    }
     req->request_line.version = version_string_to_literal(version);
     //There should be only 3 parts
     if (leftover) {
-        return HTTP_STATUS_BAD_REQUEST;
+        res = HTTP_STATUS_BAD_REQUEST;
     }
-    return PARSING_FINE;
+    return res;
 }
 
 Http_status_t parse_headers(Http_request_t* req, Tcp_connection_t tcp_con) {
