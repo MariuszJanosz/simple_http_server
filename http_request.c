@@ -17,11 +17,11 @@ void init_http_request(Http_request_t* req) {
 
 void free_http_request(Http_request_t* req) {
     req->request_line.method = NULL;
-    free(req->request_line.target);
+    if (req->request_line.target) free(req->request_line.target);
     req->request_line.target = NULL;
     req->request_line.version = NULL;
     free_field_line_hash_map(&req->headers);
-    free(req->body);
+    if (req->body) free(req->body);
     req->body = NULL;
     req->body_size = 0;
     free_field_line_hash_map(&req->trailers);
@@ -76,8 +76,8 @@ Http_status_t parse_request_line(Http_request_t* req, Tcp_connection_t tcp_con) 
 }
 
 Http_status_t parse_headers(Http_request_t* req, Tcp_connection_t tcp_con) {
-    char* line = NULL;
     Http_status_t res = PARSING_FINE;
+    char* line = NULL;
 parse_next_field_line:
     line = get_line(tcp_con);
     if (!line) return PARSING_BROKEN_CLOSE_CONNECTION; //Unexpected EOF
