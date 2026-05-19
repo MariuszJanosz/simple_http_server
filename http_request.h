@@ -8,6 +8,7 @@
 #include <stddef.h>
 
 #define MAX_REQUEST_BODY_SIZE (100 * 1024 * 1024) //100MB
+#define MAX_REQUEST_CHUNK_SIZE (1 * 1024 * 1024) //1MB
 
 typedef struct Http_request_line_t {
     const char* method;
@@ -21,6 +22,7 @@ typedef struct Http_request_t {
     char* body;
     size_t body_size;
     Field_line_hash_map_t trailers;
+    int has_trailers_section;
 } Http_request_t;
 
 void init_http_request(Http_request_t* req);
