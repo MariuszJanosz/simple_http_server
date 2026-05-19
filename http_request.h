@@ -7,6 +7,8 @@
 
 #include <stddef.h>
 
+#define MAX_REQUEST_BODY_SIZE (100 * 1024 * 1024) //100MB
+
 typedef struct Http_request_line_t {
     const char* method;
     char* target;

@@ -1,5 +1,6 @@
 #include "http_request.h"
 #include "http_field_line.h"
+#include "reader.h"
 
 #include <string.h>
 #include <ctype.h>
@@ -149,8 +150,9 @@ Http_status_t parse_body(Http_request_t* req, Tcp_connection_t tcp_con) {
     //Check if req has body with a given length
     Field_line_t* content_length_fl = find_field_line_in_hash_map(&req->headers, "Content-Length");
     if (content_length_fl) {
+        //Content-Length can appear only once
         if (content_length_fl->count != 1) {
-            return PARING_BROKEN_CLOSE_CONNECTION;
+            return PARSING_BROKEN_CLOSE_CONNECTION;
         }
         char* ptr = content_length_fl->field_values[0];
         while (isspace(*ptr)) ++ptr;
@@ -165,9 +167,11 @@ Http_status_t parse_body(Http_request_t* req, Tcp_connection_t tcp_con) {
                 }
             }
             else {
+                //Trailing spaces are fine, skip them
                 while (isspace(*ptr)) {
                     ++ptr;
                 }
+                //But if there were something else then return error
                 if (*ptr == '\0') --ptr;
                 else return PARING_BROKEN_CLOSE_CONNECTION;
             }
