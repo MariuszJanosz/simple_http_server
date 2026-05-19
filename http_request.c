@@ -98,10 +98,15 @@ parse_next_field_line:
         if (res == PARSING_FINE) res = HTTP_STATUS_BAD_REQUEST;
         goto parse_next_field_line;
     }
-    const Field_line_t fl;
-    fl.field_name = strtok(line, ":");
-    fl.field_value = strtok(NULL, "\r\n");
-    add_field_line_to_hash_map(&req->headers, fl);
+    char* field_name = strtok(line, ":");
+    char* field_value = strtok(NULL, "\r\n");
+    //RFC9112 5.1 whitespace between field-name and ":" not allowed
+    if (isspace(field_name[strlen(field_name) - 1])) {
+        free(line);
+        if (res == PARSING_FINE) res = HTTP_STATUS_BAD_REQUEST;
+        goto parse_next_field_line;
+    }
+    add_field_line_to_hash_map(&req->headers, field_name, field_value);
     free(line);
     goto parse_next_field_line;
 }
