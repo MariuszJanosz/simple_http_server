@@ -1,6 +1,7 @@
 #include "http_request.h"
 #include "http_field_line.h"
 #include "reader.h"
+#include "http_normalize_field_line.h"
 
 #include <string.h>
 #include <ctype.h>
@@ -350,22 +351,33 @@ Http_status_t parse_http_request(Http_request_t* req, Tcp_connection_t tcp_con) 
     if (headers_parsing_status == PARSING_BROKEN_CLOSE_CONNECTION) {
         return PARSING_BROKEN_CLOSE_CONNECTION;
     }
+    Http_status_t headers_normalization_status = normalize(&req->headers);
+    if (headers_normalization_status == PARSING_BROKEN_CLOSE_CONNECTION) {
+        return PARSING_BROKEN_CLOSE_CONNECTION;
+    }
     Http_status_t body_parsing_status = parse_body(req, tcp_con);
     if (body_parsing_status == PARSING_BROKEN_CLOSE_CONNECTION) {
         return PARSING_BROKEN_CLOSE_CONNECTION;
     }
     Http_status_t trailers_parsing_status = PARSIG_FINE;
+    Http_status_t trailers_normalization_status = PARSING_FINE;
     if (req->has_trailers_section) {
         trailers_parsing_status = parse_trailers(req, tcp_con);
         if (trailers_parsing_status == PARSING_BROKEN_CLOSE_CONNECTION) {
+            return PARSING_BROKEN_CLOSE_CONNECTION;
+        }
+        trailers_normalization_status = normalize(&req->trailers);
+        if (trailers_normalization_status == PARSING_BROKEN_CLOSE_CONNECTION) {
             return PARSING_BROKEN_CLOSE_CONNECTION;
         }
     }
     //Return first encountered non-critical error or PARSING_FINE if no error occured
     if (request_line_parsing_status != PARSING_FINE) return request_line_parsing_status;
     if (headers_parsing_status != PARSING_FINE) return headers_parsing_status;
+    if (headers_normalization_status != PARSING_FINE) return headers_normalization_status;
     if (body_parsing_status != PARSING_FINE) return body_parsing_status;
     if (trailers_parsing_status != PARSING_FINE) return trailers_parsing_status;
+    if (trailers_normalization_status != PARSING_FINE) return trailers_normalization_status;
     return PARSING_FINE;
 }
 
