@@ -1,6 +1,8 @@
 #ifndef HTTP_FIELD_LINE_H
 #define HTTP_FIELD_LINE_H
 
+#include "http_common_field_lines.h"
+
 #include <stddef.h>
 
 typedef enum Bucket_status_t {
