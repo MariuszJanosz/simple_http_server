@@ -57,8 +57,11 @@ Http_status_t normalize_singleton_with_deduplication(Field_line_t* fl) {
         return PARSING_FINE;
     }
     do {
-        if (strcmp(first_token, next_token) != 0)
+        if (strcmp(first_token, next_token) != 0) {
+            if (strcasecmp("Content-Length", fl->field_name) == 0)
+                return PARSING_BROKEN_CLOSE_CONNECTION;
             return HTTP_STATUS_BAD_REQUEST;
+        }
     } while (next_token = strtok(NULL, ","));
     char* deduplicated = strdup(first_token);
     if (!deduplicated) {

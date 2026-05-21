@@ -104,6 +104,7 @@ parse_next_field_line:
     }
     char* field_name = strtok(line, ":");
     char* field_value = strtok(NULL, "\r\n");
+    if (!field_value) field_value = "";
     //RFC9112 5.1 whitespace between field-name and ":" not allowed
     if (isspace(field_name[strlen(field_name) - 1])) {
         free(line);
@@ -269,49 +270,38 @@ Http_status_t parse_body(Http_request_t* req, Tcp_connection_t tcp_con) {
     if (transfer_encoding_fl) {
         const char* chunked_str = "chunked";
         size_t len = strlen(chunked_str);
-        for (int i = 0; i < transfer_encoding_fl->count; ++i) {
-            char* val = transfer_encoding_fl->field_values[i];
-            int pos = 0;
-            while (val[pos]) {
-                int j = 0;
-                for (; j < len; ++j) {
-                    if (val[pos + j] != chunked_str[j]) break;
-                }
-                if (j != len) {
-                    pos += j;
-                    while (val[pos] != ',' && val[pos] != '\0') ++pos;
-                    if (val[pos] == ',') ++pos;
-                }
-                else {
-                    pos += j;
-                    if (val[pos] == ',' || val[pos] == '\0') {
-                        //If "chunked" is the last value
-                        if (i + 1 == transfer_encoding_fl->count && val[pos] == '\0') {
-                            inint_field_line_hash_map(&req->trailers, 8);
-                            req->has_trailers_section = 1;
-                            return parse_body_chunked(req, tcp_con);
-                        }
-                        //If "chunked" is not the last value connection is broken
-                        return PARING_BROKEN_CLOSE_CONNECTION;
-                    }
-                    else {
-                        while (val[pos] != ',' && val[pos] != '\0') ++pos;
-                        if (val[pos] == ',') ++pos;
-                    }
-                }
+        char* val = transfer_encoding_fl->field_values[0];
+        int pos = 0;
+        while (val[pos]) {
+            int j = 0;
+            for (; j < len; ++j) {
+                if (val[pos + j] != chunked_str[j]) break;
+            }
+            if (j != len) {
+                pos += j;
+                while (val[pos] != ',' && val[pos] != '\0') ++pos;
+                if (val[pos] == ',') ++pos;
+            }
+            else if (val[pos + j] == '\0') {
+                inint_field_line_hash_map(&req->trailers, 8);
+                req->has_trailers_section = 1;
+                return parse_body_chunked(req, tcp_con);
+            }
+            else if (val[pos + j] == ',') {
+                return PARING_BROKEN_CLOSE_CONNECTION;
+            }
+            else {
+                pos += j;
+                while (val[pos] != ',' && val[pos] != '\0') ++pos;
+                if (val[pos] == ',') ++pos;
             }
         }
     }
     //Check if req has body with a given length
     Field_line_t* content_length_fl = find_field_line_in_hash_map(&req->headers, "Content-Length");
     if (content_length_fl) {
-        //Content-Length can appear only once
-        if (content_length_fl->count != 1) {
-            return PARSING_BROKEN_CLOSE_CONNECTION;
-        }
         char* ptr = content_length_fl->field_values[0];
         while (isspace(*ptr)) ++ptr;
-        if (*ptr == '\0') return PARING_BROKEN_CLOSE_CONNECTION;
         size_t content_length = 0;
         do {
             if ('0' <= *ptr && *ptr <= 9) {
@@ -322,11 +312,7 @@ Http_status_t parse_body(Http_request_t* req, Tcp_connection_t tcp_con) {
                 }
             }
             else {
-                //Trailing spaces are fine, skip them
-                while (isspace(*ptr)) {
-                    ++ptr;
-                }
-                //But if there were something else then return error
+                while (isspace(*ptr)) ++ptr;
                 if (*ptr == '\0') --ptr;
                 else return PARING_BROKEN_CLOSE_CONNECTION;
             }

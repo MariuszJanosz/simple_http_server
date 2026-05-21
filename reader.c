@@ -108,7 +108,7 @@ char* get_line(Tcp_connection_t tcp_con) {
         --recur_depth;
         return NULL;
     }
-    --revur_depth;
+    --recur_depth;
     return get_line(tcp_con);
 }
 
