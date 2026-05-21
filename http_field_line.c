@@ -125,6 +125,10 @@ void add_field_line_to_hash_map(Field_line_hash_map_t* hm, const char* field_nam
     hm->buckets[hash].field_line.field_name = s;
     hm->buckets[hash].field_line.field_values =
         malloc(sizeof(*hm->buckets[hash].field_line.field_values));
+    if (!hm->buckets[hash].field_line.field_values) {
+        LOG(ERROR, "malloc failed!");
+        exit(1);
+    }
     hm->buckets[hash].field_line.capacity = 1;
     s = strdup(field_value);
     if (!s) {

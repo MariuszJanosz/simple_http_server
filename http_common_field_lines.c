@@ -1,7 +1,13 @@
 #include "http_common_field_lines.h"
 
+#include <string.h>
+
+//IANA registry of field line names
 //https://www.iana.org/assignments/http-fields/http-fields.xhtml
+//When modifying this array keep lexicographical order by field_name
+//it is used in binary search
 const Field_line_attributes_t __common_field_lines_attributes__[] = {
+    {"",                                            UNKNOWN_TYPE},
     {"A-IM",                                        LIST},
     {"Accept",                                      LIST},
     {"Accept-Additions",                            LIST},
@@ -261,8 +267,27 @@ const size_t __common_field_lines_count__ =
                             sizeof(__common_field_lines_attributes__) /
                             sizeof(__common_field_lines_attributes__[0]);
 
-extern const Field_line_attribute_t* common_field_lines_attributes =
+extern const Field_line_attributes_t* common_field_lines_attributes =
                             __common_field_lines_attributes__;
 extern const size_t common_field_lines_count =
                             __common_field_lines_count__;
+
+Field_line_attributes_t* find_field_line_attributes(const char* field_name) {
+    size_t l = 0, h = common_field_lines_count - 1;
+    while (l <= h) {
+        size_t m = l + (h - l) / 2;
+        if (strcasecmp(common_field_lines_attributes[m].field_name, field_name) < 0) {
+            l = m + 1;
+        }
+        else if (strcasecmp(common_field_lines_attributes[m].field_name, field_name) > 0) {
+            h = m - 1;
+        }
+        else {
+            return &common_field_lines_attributes[m];
+        }
+    }
+    //If we didn't find field_name we return 0-th element,
+    //it is a placeholder for unknown field line name
+    return &common_field_lines_attributes[0];
+}
 
