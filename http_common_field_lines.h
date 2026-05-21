@@ -12,8 +12,12 @@ typedef enum Field_line_type_t {
     UNKNOWN_TYPE
 } Field_line_type_t;
 
-extern const char** common_field_line_names;
-extern const Field_line_type_t* common_field_line_types;
+typedef struct Field_line_attribute_t {
+    const char* field_name;
+    Field_line_type_t type;
+} Field_line_attribute_t;
+
+extern const Field_line_attribute_t* common_field_lines_attributes;
 extern const size_t common_field_lines_count;
 
 #endif //HTTP_COMMON_FIELD_LINES_H
