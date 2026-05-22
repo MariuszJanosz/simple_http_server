@@ -9,11 +9,11 @@ size_t prehash(const unsigned char* key) {
     size_t res = 0;
     while (*key) {
         //field line name is case-insensitive, make everything lowercase
-        res += tolower(*key);
+        res += tolower((unsigned char)*key);
         for (int i = 0; i < 2 * sizeof(res); ++i) {
             res = (res << 4 * i) + res + (res >> 4 * i);
         }
-        res += tolower(*key);
+        res += tolower((unsigned char)*key);
         ++key;
     }
     return res;

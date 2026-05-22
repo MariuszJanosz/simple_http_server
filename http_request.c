@@ -87,7 +87,7 @@ parse_next_field_line:
     if (!line) return PARSING_BROKEN_CLOSE_CONNECTION; //Unexpected EOF
     if (strcmp(line, "\r\n") == 0 || strcmp(line, "\n") == 0) return free(line), res; //End of headers
     //RFC9112 2.2 field lines starting with a white space shall be ignored
-    if (isspace(line[0])) {
+    if (isspace((unsigned char)line[0])) {
         free(line);
         goto parse_next_field_line;
     }
@@ -106,7 +106,7 @@ parse_next_field_line:
     char* field_value = strtok(NULL, "\r\n");
     if (!field_value) field_value = "";
     //RFC9112 5.1 whitespace between field-name and ":" not allowed
-    if (isspace(field_name[strlen(field_name) - 1])) {
+    if (isspace((unsigned char)field_name[strlen(field_name) - 1])) {
         free(line);
         if (res == PARSING_FINE) res = HTTP_STATUS_BAD_REQUEST;
         goto parse_next_field_line;
@@ -194,9 +194,10 @@ Http_status_t parse_body_chunked(Http_request_t* req, Tcp_connection_t tcp_con) 
                 chunk_size *= 16;
                 chunk_size += (*size_str - '0');
             }
-            else if ('a' <= tolower(*size_str) && tolower(*size_str) <= 'f') {
+            else if ('a' <= tolower((unsigned char)*size_str) &&
+                            tolower((unsigned char)*size_str) <= 'f') {
                 chunk_size *= 16;
-                chunk_size += (tolower(*size_str) - 'a') + 10;
+                chunk_size += (tolower((unsigned char)*size_str) - 'a') + 10;
             }
             //Invalid chunk_size
             else {
@@ -301,7 +302,6 @@ Http_status_t parse_body(Http_request_t* req, Tcp_connection_t tcp_con) {
     Field_line_t* content_length_fl = find_field_line_in_hash_map(&req->headers, "Content-Length");
     if (content_length_fl) {
         char* ptr = content_length_fl->field_values[0];
-        while (isspace(*ptr)) ++ptr;
         size_t content_length = 0;
         do {
             if ('0' <= *ptr && *ptr <= 9) {
@@ -312,9 +312,7 @@ Http_status_t parse_body(Http_request_t* req, Tcp_connection_t tcp_con) {
                 }
             }
             else {
-                while (isspace(*ptr)) ++ptr;
-                if (*ptr == '\0') --ptr;
-                else return PARING_BROKEN_CLOSE_CONNECTION;
+                return PARING_BROKEN_CLOSE_CONNECTION;
             }
             ++ptr;
         } while (*ptr != '\0');
