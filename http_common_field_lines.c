@@ -122,7 +122,7 @@ const Field_line_attributes_t __common_field_lines_attributes__[] = {
     {"From",                                        SINGLETON},
     {"GetProfile",                                  SINGLETON},
     {"Hobareg",                                     SINGLETON},
-    {"Host",                                        SINGLETON_WITH_DEDUPLICATION},
+    {"Host",                                        SINGLETON},
     {"HTTP2-Settings",                              SINGLETON},
     {"If",                                          SINGLETON},
     {"If-Match",                                    LIST_NONEMPTY},
