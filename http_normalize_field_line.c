@@ -1,7 +1,10 @@
 #include "http_normalize_field_line.h"
 #include "http_common_field_lines.h"
+#include "log.h"
 
 #include <string.h>
+#include <ctype.h>
+#include <stdlib.h>
 
 Field_line_type_t determine_type(const char* field_name) {
     return find_field_line_attributes(field_name)->type;
@@ -9,9 +12,9 @@ Field_line_type_t determine_type(const char* field_name) {
 
 void combine_values_into_list(Field_line_t* fl) {
     //nothing to do, so return early to avoid malloc
-    if (fl->size < 2) return;
+    if (fl->count < 2) return;
     size_t new_line_size = 0;
-    for (int i = 0; i < fl->size; ++i) {
+    for (int i = 0; i < fl->count; ++i) {
         //+1 for appended ',' or '\0' after each appended line
         new_line_size += strlen(fl->field_values[i]) + 1;
     }
@@ -21,14 +24,14 @@ void combine_values_into_list(Field_line_t* fl) {
         exit(1);
     }
     size_t first_empty = 0;
-    for (int i = 0; i < fl->size; ++i) {
+    for (int i = 0; i < fl->count; ++i) {
         strcpy(new_line + first_empty, fl->field_values[i]);
         first_empty += strlen(fl->field_values[i]);
         free(fl->field_values[i]);
         new_line[first_empty++] = ',';
     }
     new_line[first_empty - 1] = '\0';
-    fl->size = 1;
+    fl->count = 1;
     fl->field_values[0] = new_line;
 }
 
@@ -81,9 +84,134 @@ Http_status_t normalize_unknown_type(Field_line_t* fl) {
     return PARSING_FINE; //do nothing
 }
 
+void remove_OWS_list(Field_line_t* fl) {
+    for (size_t i = 0; i < fl->count; ++i) {
+        char* new_start = fl->field_values[i];
+        size_t len = strlen(new_start);
+        while (len > 0 && isspace((unsigned char)new_start[len - 1])) --len;
+        new_start[len] = '\0';
+        while (isspace((unsigned char)*new_start)) {
+            ++new_start;
+        }
+        len = 0;
+        size_t OWS_count = 0;
+        while (new_start[len]) {
+            char* first_empty = new_start + len;
+            char* next_section = first_empty + OWS_count;
+            while (isspace((unsigned char)*next_section)) {
+                ++next_section;
+                ++OWS_count;
+            }
+            if (*next_section == '\0') { //It was the last section
+                *first_empty = '\0';
+                break;
+            }
+            else if (*next_section == '\"') {
+                size_t section_len = 1;
+                while ( next_section[section_len] != '\"' &&
+                        next_section[section_len] != '\0') {
+                    ++section_len;
+                }
+                //If it was invalid return immediately, further parsing would return error anyway
+                if (next_section[section_len] == '\0') return;
+                ++section_len;
+                size_t section_OWS_count = 0;
+                while (isspace((unsigned char)next_section[section_len + section_OWS_count])) {
+                    ++section_OWS_count;
+                }
+                //If it was invalid return immediately, further parsing would return error anyway
+                if (    next_section[section_len + section_OWS_count] != '\0' &&
+                        next_section[section_len + section_OWS_count] != ',') {
+                    return;
+                }
+                if (next_section[section_len + section_OWS_count] == ',') {
+                    memmove(first_empty, next_section, section_len);
+                    first_empty[section_len] = ',';
+                    len += section_len + 1;
+                    OWS_count += section_OWS_count;
+                }
+                else {
+                    memmove(first_empty, next_section, section_len);
+                    first_empty[section_len] = '\0';
+                    len += section_len;
+                    OWS_count += section_OWS_count;
+                }
+            }
+            else if (*next_section == ',') {
+                *first_empty = ',';
+                ++len;
+            }
+            else {
+                size_t section_len = 1;
+                while ( next_section[section_len] != '\0' &&
+                        next_section[section_len] != ',') {
+                    ++section_len;
+                }
+                size_t section_OWS_count = 0;
+                if (next_section[section_len] == '\0') {
+                    while (section_len > 0 && isspace((unsigned char)next_section[section_len - 1])) {
+                        --section_len;
+                        ++section_OWS_count;
+                    }
+                    memmove(first_empty, next_section, section_len);
+                    first_empty[section_len] = '\0';
+                    len += section_len;
+                    OWS_count += section_OWS_count;
+                }
+                else {
+                    while (section_len > 0 && isspace((unsigned char)next_section[section_len - 1])) {
+                        --section_len;
+                        ++section_OWS_count;
+                    }
+                    memmove(first_empty, next_section, section_len);
+                    first_empty[section_len] = ',';
+                    len += section_len + 1;
+                    OWS_count += section_OWS_count;
+                }
+            }
+        }
+        memmove(fl->field_values[i], new_start, len + 1);
+    }
+}
+
+void remove_OWS_singleton(Field_line_t* fl) {
+    for (size_t i = 0; i < fl->count; ++i) {
+        char* ptr = fl->field_values[i];
+        size_t len = strlen(ptr);
+        while (len > 0 && isspace((unsigned char)ptr[len - 1])) --len;
+        ptr[len] = '\0';
+        while (isspace((unsigned char)*ptr)) {
+            ++ptr;
+            --len;
+        }
+        memmove(fl->field_values[i], ptr, len + 1);
+    }
+}
+
+void remove_OWS(Field_line_t* fl, Field_line_type_t type) {
+    switch (type) {
+        case LIST:
+        case LIST_NONEMPTY:
+        case SINGLETON_WITH_DEDUPLICATION:
+            remove_OWS_list(fl);
+            break;
+        case SINGLETON:
+            remove_OWS_singleton(fl);
+            break;
+        case MULTILINE_DO_NOT_MERGE:
+        case UNKNOWN_TYPE:
+        default:
+            break; //do nothing
+    }
+}
+
 Http_status_t normalize_field_line(Field_line_t* fl) {
     const char* field_name = fl->field_name;
     Field_line_type_t type = determine_type(field_name);
+    //first we have to normalize OWSs otherwise byte by byte deduplication causes trouble
+    //we normalize them by removing them, it simplifies further processing like for example
+    //we don't have to skip white spaces when converting Content-Length from string to number
+    remove_OWS(fl, type);
     switch (type) {
         case LIST:
             return normalize_list(fl);
@@ -96,20 +224,21 @@ Http_status_t normalize_field_line(Field_line_t* fl) {
         case MULTILINE_DO_NOT_MERGE:
             return normalize_multiline_do_not_merge(fl);
         case UNKNOWN_TYPE:
-            return normalize_unknon_type(fl);
+        default:
+            return normalize_unknown_type(fl);
     }
     return PARSING_FINE;
 }
 
-Http_status_t normalize(Http_field_line_hash_map_t* hm) {
+Http_status_t normalize(Field_line_hash_map_t* hm) {
     Http_status_t res = PARSING_FINE;
-    for (size_t i = 0; i < hm->count; ++i) {
-        if (hm->buckets[i] != OCCUPIED) continue;
+    for (size_t i = 0; i < hm->capacity; ++i) {
+        if (hm->buckets[i].bucket_status != OCCUPIED) continue;
         Http_status_t tmp = normalize_field_line(&hm->buckets[i].field_line);
-        if (tmp == PARING_BROKEN_CLOSE_CONNECTION) {
-            return PARING_BROKEN_CLOSE_CONNECTION;
+        if (tmp == PARSING_BROKEN_CLOSE_CONNECTION) {
+            return PARSING_BROKEN_CLOSE_CONNECTION;
         }
-        if (res == PARING_FINE) res = tmp;
+        if (res == PARSING_FINE) res = tmp;
     }
     return res;
 }
