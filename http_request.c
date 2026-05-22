@@ -2,9 +2,11 @@
 #include "http_field_line.h"
 #include "reader.h"
 #include "http_normalize_field_line.h"
+#include "log.h"
 
 #include <string.h>
 #include <ctype.h>
+#include <stdlib.h>
 
 void init_http_request(Http_request_t* req) {
     req->request_line.method = NULL;
@@ -95,7 +97,7 @@ parse_next_field_line:
     char* ptr = line;
     int colon_found = 0;
     while (*ptr) {
-        if (*ptr == ":") colon_found = 1;
+        if (*ptr == ':') colon_found = 1;
     }
     if (!colon_found) {
         free(line);
@@ -210,7 +212,7 @@ Http_status_t parse_body_chunked(Http_request_t* req, Tcp_connection_t tcp_con) 
                 req->body = NULL;
                 return PARSING_BROKEN_CLOSE_CONNECTION;
             }
-            ++str_size;
+            ++size_str;
         }
         //line is no longer needed
         free(line);
@@ -253,7 +255,7 @@ Http_status_t parse_body_chunked(Http_request_t* req, Tcp_connection_t tcp_con) 
             req->body = NULL;
             return PARSING_BROKEN_CLOSE_CONNECTION;
         }
-        if (strcmp(trailngCRLF, "\n") == 0 || strcmp(trailingCRLF, "\r\n") == 0) {//OK
+        if (strcmp(trailingCRLF, "\n") == 0 || strcmp(trailingCRLF, "\r\n") == 0) {//OK
             free(trailingCRLF);
         }
         else {
@@ -284,12 +286,12 @@ Http_status_t parse_body(Http_request_t* req, Tcp_connection_t tcp_con) {
                 if (val[pos] == ',') ++pos;
             }
             else if (val[pos + j] == '\0') {
-                inint_field_line_hash_map(&req->trailers, 8);
+                init_field_line_hash_map(&req->trailers, 8);
                 req->has_trailers_section = 1;
                 return parse_body_chunked(req, tcp_con);
             }
             else if (val[pos + j] == ',') {
-                return PARING_BROKEN_CLOSE_CONNECTION;
+                return PARSING_BROKEN_CLOSE_CONNECTION;
             }
             else {
                 pos += j;
@@ -308,11 +310,11 @@ Http_status_t parse_body(Http_request_t* req, Tcp_connection_t tcp_con) {
                 content_length *= 10;
                 content_length += (*ptr - '0');
                 if (content_length > MAX_REQUEST_BODY_SIZE) {
-                    return PARING_BROKEN_CLOSE_CONNECTION;
+                    return PARSING_BROKEN_CLOSE_CONNECTION;
                 }
             }
             else {
-                return PARING_BROKEN_CLOSE_CONNECTION;
+                return PARSING_BROKEN_CLOSE_CONNECTION;
             }
             ++ptr;
         } while (*ptr != '\0');
@@ -343,7 +345,7 @@ Http_status_t parse_http_request(Http_request_t* req, Tcp_connection_t tcp_con) 
     if (body_parsing_status == PARSING_BROKEN_CLOSE_CONNECTION) {
         return PARSING_BROKEN_CLOSE_CONNECTION;
     }
-    Http_status_t trailers_parsing_status = PARSIG_FINE;
+    Http_status_t trailers_parsing_status = PARSING_FINE;
     Http_status_t trailers_normalization_status = PARSING_FINE;
     if (req->has_trailers_section) {
         trailers_parsing_status = parse_trailers(req, tcp_con);

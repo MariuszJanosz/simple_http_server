@@ -257,7 +257,7 @@ const Field_line_attributes_t __common_field_lines_attributes__[] = {
     {"Want-Content-Digest",                         LIST_NONEMPTY},
     {"Want-Digest",                                 LIST},
     {"Want-Repr-Digest",                            LIST_NONEMPTY},
-    {"Warning",                                     SNIGLETON},
+    {"Warning",                                     SINGLETON},
     {"WWW-Authenticate",                            LIST},
     {"X-Content-Type-Options",                      SINGLETON},
     {"X-Frame-Options",                             SINGLETON}
@@ -267,27 +267,27 @@ const size_t __common_field_lines_count__ =
                             sizeof(__common_field_lines_attributes__) /
                             sizeof(__common_field_lines_attributes__[0]);
 
-extern const Field_line_attributes_t* common_field_lines_attributes =
+const Field_line_attributes_t* g_common_field_lines_attributes =
                             __common_field_lines_attributes__;
-extern const size_t common_field_lines_count =
+const size_t g_common_field_lines_count =
                             __common_field_lines_count__;
 
-Field_line_attributes_t* find_field_line_attributes(const char* field_name) {
-    size_t l = 0, h = common_field_lines_count - 1;
+const Field_line_attributes_t* find_field_line_attributes(const char* field_name) {
+    size_t l = 0, h = g_common_field_lines_count - 1;
     while (l <= h) {
         size_t m = l + (h - l) / 2;
-        if (strcasecmp(common_field_lines_attributes[m].field_name, field_name) < 0) {
+        if (strcasecmp(g_common_field_lines_attributes[m].field_name, field_name) < 0) {
             l = m + 1;
         }
-        else if (strcasecmp(common_field_lines_attributes[m].field_name, field_name) > 0) {
+        else if (strcasecmp(g_common_field_lines_attributes[m].field_name, field_name) > 0) {
             h = m - 1;
         }
         else {
-            return &common_field_lines_attributes[m];
+            return &g_common_field_lines_attributes[m];
         }
     }
     //If we didn't find field_name we return 0-th element,
     //it is a placeholder for unknown field line name
-    return &common_field_lines_attributes[0];
+    return &g_common_field_lines_attributes[0];
 }
 

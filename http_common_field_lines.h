@@ -17,10 +17,10 @@ typedef struct Field_line_attribute_t {
     Field_line_type_t type;
 } Field_line_attributes_t;
 
-extern const Field_line_attributes_t* common_field_lines_attributes;
-extern const size_t common_field_lines_count;
+extern const Field_line_attributes_t* g_common_field_lines_attributes;
+extern const size_t g_common_field_lines_count;
 
-Field_line_attributes_t* find_field_line_attributes(const char* field_name);
+const Field_line_attributes_t* find_field_line_attributes(const char* field_name);
 
 #endif //HTTP_COMMON_FIELD_LINES_H
 
