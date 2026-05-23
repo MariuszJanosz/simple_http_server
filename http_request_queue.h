@@ -1,16 +1,17 @@
 #ifndef HTTP_REQUEST_QUEUE_H
 #define HTTP_REQUEST_QUEUE_H
 
-#include "http_message.h"
+#include "http_request_context.h"
 #include "reader.h"
 #include "tcp_connection.h"
+#include "status.h"
 
 #include <threads.h>
 
 #define REQUEST_QUEUE_CAPACITY 256
 
 typedef struct Request_block_t {
-    Http_message_t req;
+    Http_request_context_t req_con;
     Http_status_t status;
     int request_ready;
 
