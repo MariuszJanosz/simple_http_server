@@ -2,6 +2,7 @@
 #include "http_request_queue.h"
 #include "http_request_handler.h"
 #include "http_field_line.h"
+#include "http_response.h"
 
 #include <threads.h>
 #include <stdlib.h>

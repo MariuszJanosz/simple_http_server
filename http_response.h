@@ -1,0 +1,48 @@
+#ifndef HTTP_RESPONSE_H
+#define HTTP_RESPONSE_H
+
+#include "http_request_context.h"
+#include "status.h"
+
+typedef enum Http_body_section_type_t {
+    FILE_DESCRIPTOR,
+    CHAR_BUFFER
+} Http_body_section_type_t;
+
+typedef struct Http_body_section_FILE_DESCRIPTOR_t {
+    int fd;
+} Http_body_section_FILE_DESCRIPTOR_t;
+
+typedef struct Http_body_section_CHAR_BUFFER_t {
+    char* buffer;
+    size_t size;
+} Http_body_section_CHAR_BUFFER_t;
+
+typedef union Http_any_body_section_type_t {
+    Http_body_section_FILE_DESCRIPTOR_t fd_section;
+    Http_body_section_CHAR_BUFFER_t char_buff_section;
+} Http_any_body_section_type_t;
+
+typedef struct Http_response_body_t {
+    Http_any_body_section_type_t* sections;
+    Http_body_section_type_t* section_types;
+    size_t count;
+    size_t capacity;
+} Http_response_body_t;
+
+typedef struct Http_response_t {
+    const char* status_line;
+    char* headers;
+    Http_response_body_t body;
+    char* trailers;
+    int has_body;
+    int has_trailers;
+} Http_response_t;
+
+void init_response(Http_response_t* res);
+void free_response(Http_response_t* res);
+Http_status_t prepare_response(Http_response_t* res, Http_request_context_t* req_con);
+void send_response(Http_response_t* res);
+
+#endif //HTTP_RESPONSE_H
+
