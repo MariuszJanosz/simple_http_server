@@ -4,7 +4,7 @@
 typedef enum {
     //Status of parsing stage
     //returned from parsing request stage if no error occured
-    //proper http status would be determined in following stages
+    //we can procede to request processing stage
     PARSING_FINE = 0, 
     //returned from parsing request stage if critical error occured
     //TCP stream state might have been corrupted, so we have to cloes the reading side
@@ -12,7 +12,10 @@ typedef enum {
     //we are no longer able to determine where next http request should start
     //sending 400 bad request and reading next request is not enough
     //we have to send 400 and reject all further requests on this TCP connection
-    PARSING_BROKEN_CLOSE_CONNECTION = 1, 
+    PARSING_BROKEN_CLOSE_CONNECTION = 1,
+    //returned from request processing stage if no error occured
+    //we can procede to routing stage
+    REQUEST_PROCESSING_FINE = 2,
     //1xx - Informational
     HTTP_STATUS_CONTINUE = 100,
     HTTP_STATUS_SWITCHING_PROTOCOLS = 101,
