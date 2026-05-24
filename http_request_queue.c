@@ -100,13 +100,18 @@ int response_writer_thr(void* response_writer_context) {
 
         //Send response
         send_response(&res, tcp_con);
-
-        //Echo req-res pair
         DEBUG(echo_request_response_pair(req_con, &res));
+        mtx_unlock(&rq->mtx);
 
         //Request block cleanup
         free_response(&res);
         clean_request_context(req_con);
+
+        //Advance front and set nontmpty
+        if (mtx_lock(&rq->mtx) == thrd_error) {
+            LOG(ERROR, "mtx_lock failed!");
+            exit(1);
+        }
         rq->front += 1;
         rq->front %= REQUEST_QUEUE_CAPACITY;
         rq->is_nonfull = 1;
