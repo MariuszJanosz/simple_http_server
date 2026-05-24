@@ -6,6 +6,7 @@
 
 typedef struct Http_request_context_t {
     Http_request_t req;
+    Http_status_t status;
     //Additional fields describing processed request would go here
 } Http_request_context_t;
 

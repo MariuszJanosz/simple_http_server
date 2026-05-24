@@ -1,84 +1,25 @@
 #include "log.h"
 #include "http_request_queue.h"
-#include "http_request_handler.h"
-#include "http_field_line.h"
+#include "http_request_context.h"
 #include "http_response.h"
 
 #include <threads.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <limits.h>
 #include <signal.h>
 
 extern int g_workers_finished;
 extern cnd_t g_cnd_worker_finished;
 static int s_request_queue_manager_finished = 0;
 
-//TODO make loging functions to work with new req_con and res structures
-/*
-void echo_request(Http_message_t* req) {
-    static int req_id = 0;
-    Request_line_t* req_line = (Request_line_t*)req->start_line;
-    printf("---req---echo---id:%05d---\n", req_id++);
-    if (!req_line) {
-        printf("Missing reqest line!\n\n");
-        fflush(stdout);
-        return;
-    }
-    printf("%s %s %s\n",
-        http_method_to_string(req_line->method),
-        req_line->request_target,
-        req_line->http_version);
-    for (int i = 0; i < req->field_line_hash_map.capacity; ++i) {
-        if (req->field_line_hash_map.buckets[i].bucket_status != OCCUPIED) continue;
-        printf("%s: %s\n",
-                req->field_line_hash_map.buckets[i].field_line.field_name,
-                req->field_line_hash_map.buckets[i].field_line.field_values[0]);
-    }
-    printf("\n");
-    if (req->message_body) {
-        if (req->body_size <= INT_MAX) {
-            printf("%.*s\n", (int)req->body_size, req->message_body);
-        }
-        else {
-            LOG(INFO, "Body too big, printf skipped!");
-        }
-        printf("\n");
-    }
-    fflush(stdout);
+void echo_request_resonse_pair(Http_request_context_t* req_con, Http_response_t* res) {
+    //TODO
 }
-
-void echo_response(Http_message_t* res) {
-    static int res_id = 0;
-    Status_line_t* status_line = (Status_line_t*)res->start_line;
-    printf("---res---echo---id:%05d---\n", res_id++);
-    printf("%s %s %s\n",
-        status_line->http_version,
-        status_line->status_code,
-        status_line->status_text);
-    for (int i = 0; i < res->field_line_hash_map.capacity; ++i) {
-        if (res->field_line_hash_map.buckets[i].bucket_status != OCCUPIED) continue;
-        printf("%s: %s\n",
-                res->field_line_hash_map.buckets[i].field_line.field_name,
-                res->field_line_hash_map.buckets[i].field_line.field_values[0]);
-    }
-    printf("\n");
-    if (res->message_body) {
-        if (res->body_size <= INT_MAX) {
-            printf("%.*s\n", (int)res->body_size, res->message_body);
-        }
-        else {
-            LOG(INFO, "Body too big, printf skipped!");
-        }
-        printf("\n");
-    }
-    fflush(stdout);
-}
-*/
 
 void init_request_queue(Request_queue_t* rq) {
     for (int i = 0; i < REQUEST_QUEUE_CAPACITY; ++i) {
         Request_block_t* rb = &rq->queue[i];
+        init_request_context(&rb->req_con);
         rb->request_ready = 0;
         if (cnd_init(&rb->cnd_request_ready) != thrd_success) {
             LOG(ERROR, "cnd_init failed!");
@@ -106,6 +47,7 @@ void init_request_queue(Request_queue_t* rq) {
 void free_request_queue(Request_queue_t* rq) {
     for (int i = 0; i < REQUEST_QUEUE_CAPACITY; ++i) {
         Request_block_t* rb = &rq->queue[i];
+        free_request_context(&rb->req_con);
         cnd_destroy(&rb->cnd_request_ready);
         cnd_destroy(&rb->cnd_is_front);
     }
@@ -137,18 +79,15 @@ int response_writer_thr(void* response_writer_context) {
         }
         rb->request_ready = 0;
         Http_request_context_t* req_con = &rb->req_con;
-        Http_status_t status = rb->status;
         mtx_unlock(&rq->mtx);
 
-        //Prepare response
-        //TODO
-        //Here define response with the use of new structures
-        //and prepare it with new functions
-        /*
-        Http_message_t res;
-        init_http_message(&res, HTTP_RESPONSE);
-        Response_method_t rm = handle_http_request(req, &res, &status);
-        */
+        //Process request to fill req_con or return immediately if PARSING_BROKEN_...
+        req_con->status == process_request(req_con);
+
+        //Prepare response based on request context, or generic one in case of an error
+        Http_response_t res;
+        init_response(&res);
+        req_con->status = prepare_response(&res, req_con);
 
         //Wait until it is this response turn
         if (mtx_lock(&rq->mtx) == thrd_error) {
@@ -160,34 +99,14 @@ int response_writer_thr(void* response_writer_context) {
         }
 
         //Send response
-        //TODO
-        //Here call new response function on prepared response
-        /*
-        switch (rm) {
-            case RESPONSE_NO_BODY:
-            case RESPONSE_CONTENT_LENGTH:
-                send_response(tcp_con, &res);
-                break;
-            case RESPONSE_TRANSFER_ENCODING_CHUNKED:
-                send_response_chunked(tcp_con, &res, res.body_fd, default_chunker);
-                break;
-            case RESPONSE_ABORT:
-                LOG(ERROR, "rm == RESPONSE_ABORT");
-                exit(1);
-        }
-        */
+        send_response(&res, tcp_con);
 
-        //TODO
-        //Replace with new version of echo
-        //DEBUG(echo_response(&res));
+        //Echo req-res pair
+        DEBUG(echo_request_response_pair(req_con, &res));
 
         //Request block cleanup
-        //TODO
-        //call new cleanup functions
-        /*
-        free_http_message(req);
-        free_http_message(&res);
-        */
+        free_response(&res);
+        clean_request_context(req_con);
         rq->front += 1;
         rq->front %= REQUEST_QUEUE_CAPACITY;
         rq->is_nonfull = 1;
@@ -241,14 +160,9 @@ void request_queue_manager(Request_queue_t* rq, Tcp_connection_t tcp_con) {
             cnd_wait(&rq->cnd_is_nonfull, &rq->mtx);
         }
         Http_request_context_t* req_con = &rq->queue[(rq->rear + 1) % REQUEST_QUEUE_CAPACITY].req_con;
-        //TODO replace with new init function for req_con
-        //init_http_message(req, HTTP_REQUEST);
         mtx_unlock(&rq->mtx);
         
-        //TODO use new parsing function and new echo
-        //Http_status_t status = parse_http_request(req, tcp_con);
-        //
-        //DEBUG(echo_request(req));
+        req_con->status = parse_http_request(&req_con->req, tcp_con);
 
         //Get rq->mtx and put request to rq
         if (mtx_lock(&rq->mtx) == thrd_error) {
@@ -256,26 +170,18 @@ void request_queue_manager(Request_queue_t* rq, Tcp_connection_t tcp_con) {
             exit(1);
         }
 
-        //If request is broken break
-        //TODO
-        //use new check status==PARSING_BROKEN
-        /*
-        if (!req->start_line) {
+        //If request is broken stop further reading
+        if (req_con->status == PARSING_BROKEN_CLOSE_CONNECTION) {
             abort_reading(tcp_con);
-            mtx_unlock(&rq->mtx);
-            break;
         }
-        */
 
         rq->rear += 1;
         rq->rear %= REQUEST_QUEUE_CAPACITY;
         if ((rq->rear + 1) % REQUEST_QUEUE_CAPACITY == rq->front) {
             rq->is_nonfull = 0;
         }
-        Request_block_t* rb = &rq->queue[rq->rear];
-        rb->status = status;
-        rb->request_ready = 1;
-        cnd_signal(&rb->cnd_request_ready);
+        rq->queue[rq->rear].request_ready = 1;
+        cnd_signal(&rq->queue[rq->rear].cnd_request_ready);
         mtx_unlock(&rq->mtx);
     }
     if (mtx_lock(&rq->mtx) == thrd_error) {

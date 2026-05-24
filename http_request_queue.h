@@ -12,7 +12,6 @@
 
 typedef struct Request_block_t {
     Http_request_context_t req_con;
-    Http_status_t status;
     int request_ready;
 
     cnd_t cnd_request_ready;

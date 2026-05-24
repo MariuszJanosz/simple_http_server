@@ -12,7 +12,7 @@ Http_status_t prepare_response(Http_response_t* res, Http_request_context_t* req
 
 }
 
-void send_response(Http_response_t* res) {
+void send_response(Http_response_t* res, Tcp_connection_t tcp_con) {
 
 }
 
