@@ -4,6 +4,7 @@
 #include "http_request_context.h"
 #include "status.h"
 #include "tcp_connection.h"
+#include "http_field_line.h"
 
 typedef enum Http_body_section_type_t {
     FILE_DESCRIPTOR,
@@ -33,11 +34,15 @@ typedef struct Http_response_body_t {
 
 typedef struct Http_response_t {
     const char* status_line;
+    Field_line_hash_map_t headers_hm;
     char* headers;
     Http_response_body_t body;
+    Field_line_hash_map_t trailers_hm;
     char* trailers;
     int has_body;
-    int has_trailers;
+    int has_headers_hm;
+    int has_trailers_hm;
+    int send_chunked;
 } Http_response_t;
 
 void init_response(Http_response_t* res);
