@@ -27,6 +27,7 @@ typedef struct Http_request_t {
 
 void init_http_request(Http_request_t* req);
 void free_http_request(Http_request_t* req);
+void clean_http_request(Http_request_t* req);
 Http_status_t parse_http_request(Http_request_t* req, Tcp_connection_t tcp_con);
 
 #endif //HTTP_REQUEST_H

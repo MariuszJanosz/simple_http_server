@@ -33,6 +33,21 @@ void free_http_request(Http_request_t* req) {
     }
 }
 
+void clean_http_request(Http_request_t* req) {
+    req->request_line.method = NULL;
+    if (req->request_line.target) free(req->request_line.target);
+    req->request_line.target = NULL;
+    req->request_line.version = NULL;
+    clean_field_line_hash_map(&req->headers);
+    if (req->body) free(req->body);
+    req->body = NULL;
+    req->body_size = 0;
+    if (req->has_trailers_section) {
+        req->has_trailers_section = 0;
+        free_field_line_hash_map(&req->trailers);
+    }
+}
+
 const char* method_string_to_literal(const char* method) {
     if (!method) return "UNKNOWN METHOD";
     if (strcmp(method, "GET") == 0) return "GET";

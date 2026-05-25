@@ -42,6 +42,20 @@ void free_field_line_hash_map(Field_line_hash_map_t* hm) {
     free(hm->buckets);
 }
 
+void clean_field_line_hash_map(Field_line_hash_map_t* hm) {
+    for (size_t i = 0; i < hm->capacity; ++i) {
+        if (hm->buckets[i].bucket_status == OCCUPIED) {
+            free(hm->buckets[i].field_line.field_name);
+            for (size_t j = 0; j < hm->buckets[i].field_line.count; ++j) {
+                free(hm->buckets[i].field_line.field_values[j]);
+            }
+            free(hm->buckets[i].field_line.field_values);
+            hm->buckets[i].bucket_status = EMPTY;
+        }
+    }
+    hm->occupied_count = 0;
+}
+
 ssize_t find_field_line_bucket_index(const Field_line_hash_map_t* hm, const char* field_name) {
     size_t start_index = prehash(field_name) % hm->capacity;
     size_t res = start_index;
