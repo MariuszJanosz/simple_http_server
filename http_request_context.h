@@ -8,6 +8,8 @@ typedef struct Http_request_context_t {
     Http_request_t req;
     Http_status_t status;
     //Additional fields describing processed request would go here
+    const char* path;
+    const char* query;
 } Http_request_context_t;
 
 void init_request_context(Http_request_context_t* req_con);

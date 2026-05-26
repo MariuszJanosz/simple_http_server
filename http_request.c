@@ -83,11 +83,17 @@ Http_status_t parse_request_line(Http_request_t* req, Tcp_connection_t tcp_con) 
     char* version = strtok(NULL, " \r\n");
     char* leftover = strtok(NULL, " \r\n");
     req->request_line.method = method_string_to_literal(method);
-    if (target) req->request_line.target = strdup(target);
+    char* s;
+    if (target) s = strdup(target);
     else {
         res = HTTP_STATUS_BAD_REQUEST;
-        req->request_line.target = strdup("");
+        s = strdup("");
     }
+    if (!s) {
+        log(ERROR, "strdup failed!");
+        exit(1);
+    }
+    req->request_line.target = s;
     req->request_line.version = version_string_to_literal(version);
     //There should be only 3 parts
     if (leftover) {
