@@ -6,6 +6,8 @@
 void init_request_context(Http_request_context_t* req_con) {
     init_http_requst(&req_con->req);
     req_con->status = PARSING_FINE;
+    req_con->uri_host = NULL;
+    req_con->port = NULL;
     req_con->path = NULL;
     req_con->query = NULL;
 }
@@ -17,6 +19,8 @@ void free_request_context(Http_request_context_t* req_con) {
 void clean_request_context(Http_request_context_t* req_con) {
     clean_http_request(&req_con->req);
     req_con->status = PARSING_FINE;
+    req_con->uri_host = NULL;
+    req_con->port = NULL;
     req_con->path = NULL;
     req_con->query = NULL;
 }
@@ -113,6 +117,26 @@ Http_status_t process_rquest_line(Http_request_context_t* req_con) {
     return validate_target(req_con->req.request_line.target);
 }
 
+Http_status_t process_host_field_line(Http_request_context_t* req_con) {
+    Field_line_t* host_fl = find_field_line_in_hash_map(&req_con->req.headers, "Host");
+    if (!host_fl) return HTTP_STATUS_BAD_REQUEST;
+    req_con->uri_host = host_fl->field_values[0];
+    size_t i = 0;
+    while (req_con->uri_host[i] != ':' && req_con->uri_host[i] != '\0') ++i;
+    if (!uri_is_host(req_con->uri_host, i))
+        return HTTP_STATUS_BAD_REQUEST;
+    if (req_con->uri_host[i] == ':') {
+        req_con->uri_host[i] = '\0';
+        ++i;
+    }
+    if (req_con->uri_host[i] != '\0') {
+        req_con->port = &req_con->uri_host[i];
+        if (!uri_is_port(req_con->port, strlen(req_con->port)))
+            return HTTP_STATUS_BAD_REQUEST;
+    }
+    return REQUEST_PROCESSING_FINE;
+}
+
 Http_status_t process_request(Http_request_context_t* req_con) {
     //If there was an error before this phase, return immediately.
     if (req_con->status != PARINSG_FINE) return req_con->status;
@@ -124,6 +148,7 @@ Http_status_t process_request(Http_request_context_t* req_con) {
     //loop stops immediately and status of last processed stage is returned
     typedef Http_status_t (*processing_stage_func)(Http_request_context_t* req_con);
     const processing_stage_func processing_stages[] = {
+        process_host_field_line,
         process_request_line
     };
 
