@@ -79,14 +79,14 @@ Http_status_t validate_target(Http_request_context_t* req_con) {
         return HTTP_STATUS_BAD_REQUEST;
     }
     else if (is_valid_absoulte_form(req_con->req.request_line.target)) {
-        return HTTP_STATUS_BAD_REQUEST; //Do not act as a proxy for now
+        return HTTP_STATUS_NOT_IMPLEMENTED; //Do not act as a proxy for now
     }
     else if (is_valid_origin_form(req_con->req.request_line.target)) {
         if (    strcmp("CONNECT", req_con->req.request_line.method) == 0 ||
                 strcmp("OPTIONS", req_con->req.request_line.method) == 0) {
             return HTTP_STATUS_BAD_REQUEST;
         }
-        int i = 0;
+        size_t i = 0;
         while ( req_con->req.request_line.target[i] != '?' &&
                 req_con->req.request_line.target[i] != '\0')
             ++i;
@@ -96,6 +96,10 @@ Http_status_t validate_target(Http_request_context_t* req_con) {
         }
         req_con->path = req_con->req.request_line.target;
         req_con->query = &req_con->req.request_line.target[i];
+#define MAX_REQUEST_TARGET_SIZE (12 * 1024) //12kB
+        //RFC 9112 3.
+        if (i + strlen(req_con->query) > MAX_REQUEST_TARGET_SIZE)
+            return HTTP_STATUS_URI_TOO_LONG;
         return REQUEST_PROCESSING_FINE;
     }
     return HTTP_STATUS_BAD_REQUEST;
@@ -103,7 +107,7 @@ Http_status_t validate_target(Http_request_context_t* req_con) {
 
 Http_status_t process_rquest_line(Http_request_context_t* req_con) {
     if (strcmp(req_con->req.request_line.method, "UNKNOWN METHOD") == 0)
-        return HTTP_STATUS_BAD_REQUEST;
+        return HTTP_STATUS_NOT_IMPLEMENTED;
     if (strcmp(req_con->req.request_line.version, "UNSUPPORTED VERSION") == 0)
         return HTTP_STATUS_HTTP_VERSION_NOT_SUPPORTED;
     return validate_target(req_con->req.request_line.target);
