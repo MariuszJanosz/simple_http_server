@@ -69,6 +69,7 @@ const char* version_string_to_literal(const char* version) {
 Http_status_t parse_request_line(Http_request_t* req, Tcp_connection_t tcp_con) {
     Http_status_t res = PARSING_FINE;
     char* line = NULL;
+    int empty_lines = 0;
     while (!line) {
         line = get_line(tcp_con);
         if (!line) return PARSING_BROKEN_CLOSE_CONNECTION; //Unexpected EOF
@@ -76,6 +77,9 @@ Http_status_t parse_request_line(Http_request_t* req, Tcp_connection_t tcp_con) 
         if (strcmp(line, "\r\n") == 0 || strcmp(line, "\n") == 0) {
             free(line);
             line = NULL;
+            ++empty_lines;
+#define MAX_EMPTY_LINES 16
+            if (empty_lines > MAX_EMPTY_LINES) return PARSING_BROKEN_CLOSE_CONNECTION;
         }
     }
     char* method = strtok(line, " \r\n");
@@ -99,6 +103,7 @@ Http_status_t parse_request_line(Http_request_t* req, Tcp_connection_t tcp_con) 
     if (leftover) {
         res = HTTP_STATUS_BAD_REQUEST;
     }
+    free(line);
     return res;
 }
 
