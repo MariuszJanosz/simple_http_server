@@ -3,17 +3,13 @@
 
 #include "http_request.h"
 #include "status.h"
+#include "uri_parser.h"
 
 typedef struct Http_request_context_t {
     Http_request_t req;
     Http_status_t status;
     //Additional fields describing processed request would go here
-    //Host
-    const char* uri_host;
-    const char* port;
-    //target
-    const char* path;
-    const char* query;
+    URI uri;
 } Http_request_context_t;
 
 void init_request_context(Http_request_context_t* req_con);
