@@ -12,12 +12,14 @@ target_sources(simple_http_server PRIVATE	simple_http_server.c
 						reader.c	 	reader.h
 						tcp_connection.c	tcp_connection.h
 						http_message.c		http_message.h
-						abnf.c			abnf.h
-						uri.c			uri.h
+						uri/URI/abnf.c		uri/URI/abnf.h
+						uri/URI/uri.c		uri/URI/uri.h
 						http_routing.c		http_routing.h
 						http_request_queue.c	http_request_queue.h
 						http_request_handler.c	http_request_handler.h
 						http_field_line.c	http_field_line.h)
+
+target_include_directories(simple_http_server PRIVATE uri/URI/)
 
 install(TARGETS simple_http_server RUNTIME)
 

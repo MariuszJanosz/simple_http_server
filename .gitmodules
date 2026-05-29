@@ -1,0 +1,3 @@
+[submodule "uri/URI"]
+	path = uri/URI
+	url = git@github.com:MariuszJanosz/URI.git
