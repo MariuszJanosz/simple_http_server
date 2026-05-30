@@ -142,6 +142,24 @@ Http_status_t process_host_field_line(Http_request_context_t* req_con) {
     return REQUEST_PROCESSING_FINE;
 }
 
+//RFC 9112 3.3
+Http_status_t process_scheme(Http_request_context_t* req_con) {
+    //set or check scheme
+    if (!req_con->uri.scheme.len) {
+        req_con->uri.scheme.cstr = "http";
+        req_con->uri.scheme.len = 4;
+    }
+    else {
+        //support http scheme only
+        if (    req_con->uri.scheme.len != 4 ||
+                req_con->uri.scheme.cstr[0] != 'h' ||
+                req_con->uri.scheme.cstr[1] != 't' ||
+                req_con->uri.scheme.cstr[2] != 't' ||
+                req_con->uri.scheme.cstr[3] != 'p')
+            return HTTP_STATUS_BAD_REQUEST;
+    }
+}
+
 Http_status_t process_request(Http_request_context_t* req_con) {
     //If there was an error before this phase, return immediately.
     if (req_con->status != PARINSG_FINE) return req_con->status;
@@ -158,7 +176,8 @@ Http_status_t process_request(Http_request_context_t* req_con) {
     typedef Http_status_t (*processing_stage_func)(Http_request_context_t* req_con);
     const processing_stage_func processing_stages[] = {
         process_host_field_line,
-        process_request_line
+        process_request_line,
+        process_scheme
     };
 
     for (   size_t i = 0;
