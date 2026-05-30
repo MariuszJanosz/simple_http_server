@@ -114,6 +114,9 @@ Http_status_t process_host_field_line(Http_request_context_t* req_con) {
     size_t i = 0;
     ssize_t last_colon = -1;
     StringView host, port;
+    if (cstr[i] == '[') {
+        while (cstr[i] != ']' && cstr[i] != '\0') ++i;
+    }
     while (cstr[i] != '\0') {
         if (cstr[i] == ':') last_colon = i;
         ++i;
@@ -121,6 +124,7 @@ Http_status_t process_host_field_line(Http_request_context_t* req_con) {
     if (last_colon == -1) {
         host.cstr = cstr;
         host.len = i;
+        //If there is no port set it to default
         port.cstr = "80";
         port.len = 2;
     }
