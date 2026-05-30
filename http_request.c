@@ -325,6 +325,9 @@ Http_status_t parse_body(Http_request_t* req, Tcp_connection_t tcp_con) {
                 if (val[pos] == ',') ++pos;
             }
         }
+        //RFC 9112 6.1 for a request if there were some transfer encoding
+        //it has to end with "chunked"
+        if (pos) return PARSING_BROKEN_CLOSE_CONNECTION;
     }
     //Check if req has body with a given length
     Field_line_t* content_length_fl = find_field_line_in_hash_map(&req->headers, "Content-Length");
