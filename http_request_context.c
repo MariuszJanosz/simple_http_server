@@ -193,7 +193,7 @@ Http_status_t process_transfer_encoding_line(Http_request_context_t* req_con) {
 Http_status_t process_content_length_line(Http_request_context_t* req_con) {
     //if there were "Transfer-Encoding", nothing to check here
     Field_line_t* trenc_fl = find_field_line_in_hash_map(&req_con->req.headers, "Transfer-Encoding");
-    if (trenc_fl) return REQUEST_PROCESSING_FINE;
+    if (trenc_fl && trenc_fl->field_values[0][0] != '\0') return REQUEST_PROCESSING_FINE;
     //if there were no "Content-Length", nothing to check here
     Field_line_t* cl_fl = find_field_line_in_hash_map(&req_con->req.headers, "Content-Length");
     if (!cl_fl) return REQUEST_PROCESSING_FINE;
