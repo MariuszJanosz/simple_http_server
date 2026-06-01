@@ -7,6 +7,7 @@
 #include <threads.h>
 
 #include <unistd.h>
+#include <poll.h>
 
 #define LEFTOVER_CAPACITY (4 * 1024)
 
@@ -16,7 +17,23 @@ static thread_local int stl_leftover_size = 0;
 static thread_local int stl_leftover_start_index = 0;
 
 size_t try_get_data(Tcp_connection_t tcp_con, char* output, size_t count) {
-    size_t r = read(tcp_con.fd, output, count);
+    if (stl_reading_finished) return 0;
+    int pollres;
+    struct pollfd fds;
+    fds.fd = tcp_con.fd;
+    fds.events = POLLIN;
+#define TIMEOUT (60 * 1000) //60 x 1000 ms == 1 min
+    pollres = poll(&fds, 1, TIMEOUT);
+    if (pollres < 0) {
+        LOG(ERROR, "poll failed!");
+        exit(1);
+    }
+    else if (pollres == 0) {
+        //Timeout close connection
+        stl_reading_finished = 1;
+        return 0;
+    }
+    ssize_t r = read(tcp_con.fd, output, count);
     if (r < 0) {
         LOG(ERROR, "read faile!");
         exit(1);
