@@ -192,7 +192,7 @@ Http_status_t parse_body_chunked(Http_request_t* req, Tcp_connection_t tcp_con) 
                *chunk_ext != '\n' || *chunk_ext != '\0')
             ++chunk_ext;
         if (*chunk_ext == ';') {
-            chunk_ext = '\0';
+            *chunk_ext = '\0';
             ++chunk_ext;
             //Find the end of chunk_ext
             CRLF = chunk_ext;
@@ -209,11 +209,8 @@ Http_status_t parse_body_chunked(Http_request_t* req, Tcp_connection_t tcp_con) 
             return PARSING_BROKEN_CLOSE_CONNECTION;
         }
         *CRLF = '\0';
-        //TODO: for now chunk_ext is not supported
         if (chunk_ext) {
-            free(line), free(req->body);
-            req->body = NULL;
-            return PARSING_BROKEN_CLOSE_CONNECTION;
+            //TODO: for now chunk_ext is not supported
         }
         //Get_chunk_size
         size_t chunk_size = 0;
