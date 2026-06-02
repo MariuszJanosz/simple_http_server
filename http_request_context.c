@@ -4,6 +4,7 @@
 
 #include <string.h>
 #include <sys/types.h>
+#include <stdio.h>
 
 void init_request_context(Http_request_context_t* req_con) {
     init_http_request(&req_con->req);
@@ -240,5 +241,43 @@ Http_status_t process_request(Http_request_context_t* req_con) {
         req_con->status = processing_stages[i](req_con);
     }
     return req_con->status;
+}
+
+void print_request_context(Http_request_context_t* req_con) {
+    Http_request_t req = req_con->req;
+    printf( "%s %s %s\n",
+            req.request_line.method,
+            req.request_line.target,
+            req.request_line.version);
+    for (size_t i = 0; i < req.headers.capacity; ++i) {
+        Field_line_hash_map_bucket_t* b = &req.headers.buckets[i];
+        if (b->bucket_status != OCCUPIED) continue;
+        for (size_t j = 0; j < b->field_line.count; ++j) {
+            printf("%s:%s\n",
+                    b->field_line.field_name,
+                    b->field_line.field_values[j]);
+        }
+    }
+    printf("\n");
+    if (req.body_size) {
+        if (req.body_size <= 32 * 1024) {
+            printf("%.*s\n", (int)req.body_size, req.body);
+        }
+        else {
+            printf("Body too large to print!\n");
+        }
+    }
+    if (req.has_trailers_section) {
+        for (size_t i = 0; i < req.trailers.capacity; ++i) {
+            Field_line_hash_map_bucket_t* b = &req.trailers.buckets[i];
+            if (b->bucket_status != OCCUPIED) continue;
+            for (size_t j = 0; j < b->field_line.count; ++j) {
+                printf("%s:%s\n",
+                        b->field_line.field_name,
+                        b->field_line.field_values[j]);
+            }
+        }
+        printf("\n");
+    }
 }
 

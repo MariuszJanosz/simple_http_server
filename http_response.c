@@ -179,3 +179,7 @@ void send_response( Http_response_t* res,
     
 }
 
+void print_response(Http_response_t* res) {
+
+}
+

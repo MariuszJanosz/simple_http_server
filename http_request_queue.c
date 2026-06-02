@@ -13,7 +13,10 @@ extern cnd_t g_cnd_worker_finished;
 static int s_request_queue_manager_finished = 0;
 
 void echo_request_response_pair(Http_request_context_t* req_con, Http_response_t* res) {
-    //TODO
+    printf("---request----\n");
+    print_request_context(req_con);
+    printf("---response---\n");
+    print_response(res);
 }
 
 void init_request_queue(Request_queue_t* rq) {
