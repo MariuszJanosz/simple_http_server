@@ -94,7 +94,7 @@ Http_status_t parse_request_line(Http_request_t* req, Tcp_connection_t tcp_con) 
         s = strdup("");
     }
     if (!s) {
-        log(ERROR, "strdup failed!");
+        LOG(ERROR, "strdup failed!");
         exit(1);
     }
     req->request_line.target = s;

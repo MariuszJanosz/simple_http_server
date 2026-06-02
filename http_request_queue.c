@@ -12,7 +12,7 @@ extern int g_workers_finished;
 extern cnd_t g_cnd_worker_finished;
 static int s_request_queue_manager_finished = 0;
 
-void echo_request_resonse_pair(Http_request_context_t* req_con, Http_response_t* res) {
+void echo_request_response_pair(Http_request_context_t* req_con, Http_response_t* res) {
     //TODO
 }
 

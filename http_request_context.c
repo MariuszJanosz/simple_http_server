@@ -1,10 +1,12 @@
 #include "http_request_context.h"
 #include "uri_parser.h"
+#include "uri.h"
 
 #include <string.h>
+#include <sys/types.h>
 
 void init_request_context(Http_request_context_t* req_con) {
-    init_http_requst(&req_con->req);
+    init_http_request(&req_con->req);
     req_con->status = PARSING_FINE;
     memset(&req_con->uri, 0, sizeof(req_con->uri));
     req_con->close_connection_after_response = 0;
@@ -37,7 +39,7 @@ Http_status_t validate_target(Http_request_context_t* req_con) {
                 strcmp("OPTIONS", req_con->req.request_line.method) == 0)
             return HTTP_STATUS_BAD_REQUEST;
         URI uri;
-        if (parse_relative_ref(req_con.req.request_line.target, &uri) == URI_PARSING_FAIL)
+        if (parse_relative_ref(req_con->req.request_line.target, &uri) == URI_PARSING_FAIL)
             return HTTP_STATUS_BAD_REQUEST;
         if (    uri.scheme.len || uri.userinfo.len ||
                 uri.host.len || uri.port.len || uri.fragment.len)
@@ -105,12 +107,12 @@ Http_status_t validate_target(Http_request_context_t* req_con) {
     }
 }
 
-Http_status_t process_rquest_line(Http_request_context_t* req_con) {
+Http_status_t process_request_line(Http_request_context_t* req_con) {
     if (strcmp(req_con->req.request_line.method, "UNKNOWN METHOD") == 0)
         return HTTP_STATUS_NOT_IMPLEMENTED;
     if (strcmp(req_con->req.request_line.version, "UNSUPPORTED VERSION") == 0)
         return HTTP_STATUS_HTTP_VERSION_NOT_SUPPORTED;
-    return validate_target(req_con->req.request_line.target);
+    return validate_target(req_con);
 }
 
 Http_status_t process_host_field_line(Http_request_context_t* req_con) {
@@ -184,7 +186,7 @@ Http_status_t process_transfer_encoding_line(Http_request_context_t* req_con) {
         str[3] != 'n' ||
         str[4] != 'k' ||
         str[5] != 'e' ||
-        str[6] != 'd' ||)
+        str[6] != 'd')
         return HTTP_STATUS_NOT_IMPLEMENTED;
     req_con->body_chunked = 1;
     return REQUEST_PROCESSING_FINE;
@@ -211,7 +213,7 @@ Http_status_t process_content_length_line(Http_request_context_t* req_con) {
 
 Http_status_t process_request(Http_request_context_t* req_con) {
     //If there was an error before this phase, return immediately.
-    if (req_con->status != PARINSG_FINE) return req_con->status;
+    if (req_con->status != PARSING_FINE) return req_con->status;
 
     req_con->status = REQUEST_PROCESSING_FINE;
 
