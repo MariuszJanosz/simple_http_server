@@ -179,7 +179,19 @@ void send_response( Http_response_t* res,
     
 }
 
-void print_response(Http_response_t* res) {
+void print_body(Http_response_body_t* body) {
+    //TODO
+    printf("for now response body printing is not implemented\n");
+}
 
+void print_response(Http_response_t* res) {
+    printf("%s", res->status_line);
+    printf("%s", res->headers);
+    if (res->has_body) {
+        print_body(&res->body);
+    }
+    if (res->send_chunked) {
+        printf("%s", res->trailers);
+    }
 }
 
