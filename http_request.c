@@ -333,7 +333,7 @@ Http_status_t parse_body(Http_request_t* req, Tcp_connection_t tcp_con) {
         char* ptr = content_length_fl->field_values[0];
         size_t content_length = 0;
         do {
-            if ('0' <= *ptr && *ptr <= 9) {
+            if ('0' <= *ptr && *ptr <= '9') {
                 content_length *= 10;
                 content_length += (*ptr - '0');
                 if (content_length > MAX_REQUEST_BODY_SIZE) {
