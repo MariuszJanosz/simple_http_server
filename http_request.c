@@ -124,6 +124,7 @@ parse_next_field_line:
     int colon_found = 0;
     while (*ptr) {
         if (*ptr == ':') colon_found = 1;
+        ++ptr;
     }
     if (!colon_found) {
         free(line);
