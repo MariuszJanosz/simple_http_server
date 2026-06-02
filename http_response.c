@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <unistd.h>
+
 void init_response(Http_response_t* res) {
     res->status_line = NULL;
     res->headers = NULL;
@@ -174,9 +176,39 @@ Http_status_t prepare_response( Http_response_t* res,
     return prepare_response_for_error(res, req_con);
 }
 
+void send_buf(const int fd, const char* buf, const size_t size) {
+    size_t n = 0;
+    while (n < size) {
+        ssize_t tmp = write(fd, buf + n, size - n);
+        if (tmp < 0) {
+            LOG(ERROR, "write failed!");
+            exit(1);
+        }
+        n += tmp;
+    }
+}
+
+void send_body_chunked( Http_response_body_t* body,
+                        Tcp_connection_t tcp_con) {
+
+}
+
+void send_body_cl(  Http_response_body_t* body,
+                    Tcp_connection_t tcp_con) {
+
+}
+
 void send_response( Http_response_t* res,
                     Tcp_connection_t tcp_con) {
-    
+    send_buf(tcp_con.fd, res->status_line, strlen(res->status_line));
+    send_buf(tcp_con.fd, res->headers, strlen(res->headers));
+    if (res->has_body) {
+        if (res->send_chunked) {
+            send_body_chunked(&res->body, tcp_con);
+            send_buf(tcp_con.fd, res->trailers, strlen(res->trailers));
+        }
+        else send_body_cl(&res->body, tcp_con);
+    }
 }
 
 void print_body(Http_response_body_t* body) {
