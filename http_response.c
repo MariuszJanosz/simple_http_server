@@ -251,8 +251,35 @@ void send_response( Http_response_t* res,
 }
 
 void print_body(Http_response_body_t* body) {
-    //TODO
-    printf("for now response body printing is not implemented\n");
+#define MAX_SIZE_RESPONSE_BODY_TO_LOG (32 * 1024)
+    if (body->size <= MAX_SIZE_RESPONSE_BODY_TO_LOG) {
+        for (size_t i = 0; i < body->count; ++i) {
+            switch (body->section_types[i]) {
+                case FILE_DESCRIPTOR:
+                    if (lseek(body->sections[i].fd_section.fd,
+                                0, SEEK_SET) < 0) {
+                        LOG(ERROR, "lseek failed!");
+                        exit(1);
+                    }
+                    if (sendfile(STDOUT_FILENO,
+                               body->sections[i].fd_section.fd,
+                               0,
+                               body->sections[i].fd_section.size) < 0) {
+                        LOG(ERROR, "sendfile failed!");
+                        exit(1);
+                    }
+                    break;
+                case CHAR_BUFFER:
+                    printf("%.*s",
+                        body->sections[i].char_buffer_section.size
+                        body->sections[i].char_buffer_section.buffer);
+                    break;
+            }
+        }
+    }
+    else {
+        printf("Body too large to print!\n");
+    }
 }
 
 void print_response(Http_response_t* res) {

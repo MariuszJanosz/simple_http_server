@@ -259,8 +259,9 @@ void print_request_context(Http_request_context_t* req_con) {
         }
     }
     printf("\n");
+#define MAX_SIZE_REQUEST_BODY_TO_LOG (32 * 1024)
     if (req.body_size) {
-        if (req.body_size <= 32 * 1024) {
+        if (req.body_size <= MAX_SIZE_REQUEST_BODY_TO_LOG) {
             printf("%.*s\n", (int)req.body_size, req.body);
         }
         else {
