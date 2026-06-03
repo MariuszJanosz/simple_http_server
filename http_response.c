@@ -289,7 +289,22 @@ void send_body_chunked( Http_response_body_t* body,
 
 void send_body_cl(  Http_response_body_t* body,
                     Tcp_connection_t tcp_con) {
-
+    for (size_t i = 0; i < body->count; ++i) {
+        switch (body->section_types[i]) {
+            case FILE_DESCRIPTOR:
+                if (sendfile(   tcp_con.fd, body->sections[i].fd_section.fd,
+                                NULL, body->sections[i].fd_section.size) < 0) {
+                    LOG(ERROR, "sendfile failed!");
+                    exit(1);
+                }
+                break;
+            case CHAR_BUFFER:
+                send_buf(   tcp_con.fd,
+                            body->sections[i].char_buff_section.buffer,
+                            body->sections[i].char_buff_section.size);
+                break;
+        }
+    }
 }
 
 void send_response( Http_response_t* res,
@@ -311,18 +326,20 @@ void print_body(Http_response_body_t* body) {
         for (size_t i = 0; i < body->count; ++i) {
             switch (body->section_types[i]) {
                 case FILE_DESCRIPTOR:
-                    if (lseek(body->sections[i].fd_section.fd,
-                                0, SEEK_SET) < 0) {
-                        LOG(ERROR, "lseek failed!");
-                        exit(1);
-                    }
-                    if (sendfile(STDOUT_FILENO,
-                               body->sections[i].fd_section.fd,
-                               0,
-                               body->sections[i].fd_section.size) < 0) {
-                        LOG(ERROR, "sendfile failed!");
-                        exit(1);
-                    }
+                    //TODO sendfile doesn't work with stdout
+                    //replace it with something else
+//                    if (lseek(body->sections[i].fd_section.fd,
+//                                0, SEEK_SET) < 0) {
+//                        LOG(ERROR, "lseek failed!");
+//                        exit(1);
+//                    }
+//                    if (sendfile(STDOUT_FILENO,
+//                               body->sections[i].fd_section.fd,
+//                               NULL,
+//                               body->sections[i].fd_section.size) < 0) {
+//                        LOG(ERROR, "sendfile failed!");
+//                        exit(1);
+//                    }
                     break;
                 case CHAR_BUFFER:
                     printf("%.*s",
