@@ -47,7 +47,7 @@ Http_status_t validate_target(Http_request_context_t* req_con) {
             return HTTP_STATUS_BAD_REQUEST;
         if (!uri_is_path_absolute(uri.path.cstr, uri.path.len))
             return HTTP_STATUS_BAD_REQUEST;
-        if (!uri_is_query(uri.query.cstr, uri.query.len));
+        if (!uri_is_query(uri.query.cstr, uri.query.len))
             return HTTP_STATUS_BAD_REQUEST;
         //If all checks passed set path and query and return
         req_con->uri.path = uri.path;
