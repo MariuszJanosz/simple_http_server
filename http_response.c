@@ -6,6 +6,7 @@
 
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/sendfile.h>
 
 void init_response(Http_response_t* res) {
     res->status_line = NULL;
@@ -62,7 +63,7 @@ void free_body(Http_response_body_t* body) {
                 }
                 break;
             case CHAR_BUFFER:
-                free(body->sections[i].char_buffer_section.buffer);
+                free(body->sections[i].char_buff_section.buffer);
                 break;
         }
     }
@@ -271,8 +272,8 @@ void print_body(Http_response_body_t* body) {
                     break;
                 case CHAR_BUFFER:
                     printf("%.*s",
-                        body->sections[i].char_buffer_section.size
-                        body->sections[i].char_buffer_section.buffer);
+                        (int)body->sections[i].char_buff_section.size,
+                        body->sections[i].char_buff_section.buffer);
                     break;
             }
         }
