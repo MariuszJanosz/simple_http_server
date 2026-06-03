@@ -6,6 +6,8 @@
 #include "tcp_connection.h"
 #include "http_field_line.h"
 
+#include <limits.h>
+
 typedef enum Http_body_section_type_t {
     FILE_DESCRIPTOR,
     CHAR_BUFFER
@@ -38,6 +40,7 @@ typedef struct Http_response_t {
     const char* status_line;
     Field_line_hash_map_t headers_hm;
     char* headers;
+    char resource_path[PATH_MAX];
     Http_response_body_t body;
     Field_line_hash_map_t trailers_hm;
     char* trailers;

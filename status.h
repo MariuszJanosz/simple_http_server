@@ -16,6 +16,8 @@ typedef enum {
     //returned from request processing stage if no error occured
     //we can procede to routing stage
     REQUEST_PROCESSING_FINE = 2,
+    //returned fron route_http_request if no error occured
+    ROUTING_FINE = 3,
     //1xx - Informational
     HTTP_STATUS_CONTINUE = 100,
     HTTP_STATUS_SWITCHING_PROTOCOLS = 101,

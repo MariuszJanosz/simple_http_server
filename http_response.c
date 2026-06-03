@@ -1,9 +1,11 @@
 #include "http_response.h"
+#include "http_routing.h"
 #include "log.h"
 
 #include <stdlib.h>
 #include <string.h>
 
+#include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/sendfile.h>
@@ -11,6 +13,7 @@
 void init_response(Http_response_t* res) {
     res->status_line = NULL;
     res->headers = NULL;
+    res->resource_path[0] = '\0';
     res->trailers = NULL;
     res->has_body = 0;
     res->has_headers_hm = 0;
@@ -123,9 +126,60 @@ char* field_line_hash_map_to_headers_string(Field_line_hash_map_t* hm) {
     return res;
 }
 
+void load_resource_to_body( Http_response_body_t* body,
+                            char* resource_path) {
+    size_t len = strlen(resource_path);
+    if (len >= 9 && strcmp(".resource", &resource_path[len - 9]) == 0) {
+        //TODO: Here we parse .resource file and append specified elements to body
+    }
+    else {
+        //If it is not .resource file we simply append it to body as is
+        int fd = open(resource_path, O_RDONLY);
+        if (fd < 0) {
+            LOG(ERROR, "open failed!");
+            exit(1);
+        }
+        size_t size = get_file_size(fd);
+        body->section_types[0] = FILE_DESCRIPTOR;
+        body->sections[0].fd_section.fd = fd;
+        body->sections[0].fd_section.size = size;
+        body->count = 1;
+        body->size = size;
+    }
+}
+
 Http_status_t get_handler(  Http_response_t* res,
                             Http_request_context_t* req_con) {
-
+    Http_status_t status = route_http_request(req_con, res);
+    if (status == HTTP_STATUS_URI_TOO_LONG) {
+        res->status_line =  "HTTP/1.1 "
+                            stringify(HTTP_STATUS_URI_TOO_LONG)
+                            " \r\n";
+        res->headers = "\r\n";
+        return status;
+    }
+    else if (status == HTTP_STATUS_NOT_FOUND) {
+        res->status_line =  "HTTP/1.1 "
+                            stringify(HTTP_STATUS_NOT_FOUND)
+                            " \r\n";
+    }
+    else {
+        res->status_line =  "HTTP/1.1 "
+                            stringify(HTTP_STATUS_OK)
+                            " \r\n";
+    }
+    init_body(&res->body);
+    res->has_body = 1;
+    load_resource_to_body(&res->body, res->resource_path);
+    init_field_line_hash_map(&res->headers_hm, 4);
+    res->has_headers_hm = 1;
+    char size[128];
+    sprintf(size, "%zu", res->body.size);
+    add_field_line_to_hash_map( &res->headers_hm,
+                                "Content-Length",
+                                size);
+    res->headers = field_line_hash_map_to_headers_string(&res->headers_hm);
+    return status;
 }
 
 Http_status_t default_handler(  Http_response_t* res,
