@@ -13,6 +13,7 @@ typedef enum Http_body_section_type_t {
 
 typedef struct Http_body_section_FILE_DESCRIPTOR_t {
     int fd;
+    size_t size;
 } Http_body_section_FILE_DESCRIPTOR_t;
 
 typedef struct Http_body_section_CHAR_BUFFER_t {
@@ -30,6 +31,7 @@ typedef struct Http_response_body_t {
     Http_body_section_type_t* section_types;
     size_t count;
     size_t capacity;
+    size_t size;
 } Http_response_body_t;
 
 typedef struct Http_response_t {

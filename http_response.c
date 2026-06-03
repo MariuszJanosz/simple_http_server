@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include <unistd.h>
+#include <sys/stat.h>
 
 void init_response(Http_response_t* res) {
     res->status_line = NULL;
@@ -33,11 +34,49 @@ void free_response(Http_response_t* res) {
 }
 
 void init_body(Http_response_body_t* body) {
-
+#define INITIAL_BODY_CAPACITY 4
+    body->capacity = INITIAL_BODY_CAPACITY;
+    body->count = 0;
+    body->size = 0;
+    body->sections = malloc(body->capacity *
+                            sizeof(*body->sections));
+    if (!body->sections) {
+        LOG(ERROR, "malloc failed!");
+        exit(1);
+    }
+    body->section_types = malloc(   body->capacity *
+                                    sizeof(*body->section_types));
+    if (!body->section_types) {
+        LOG(ERROR, "malloc failed!");
+        exit(1);
+    }
 }
 
 void free_body(Http_response_body_t* body) {
-   
+    for (size_t i = 0; i < body->count; ++i) {
+        switch (body->section_types[i]) {
+            case FILE_DESCRIPTOR:
+                if (close(body->sections[i].fd_section.fd) < 0) {
+                    LOG(ERROR, "close failed!");
+                    exit(1);
+                }
+                break;
+            case CHAR_BUFFER:
+                free(body->sections[i].char_buffer_section.buffer);
+                break;
+        }
+    }
+    free(body->sections);
+    free(body->section_types);
+}
+
+size_t get_file_size(int fd) {
+    struct stat st;
+    if (fstat(fd, &st) < 0) {
+        LOG(ERROR, "fstat failed!");
+        exit(1);
+    }
+    return (size_t)st.st_size;
 }
 
 size_t get_headers_size(Field_line_hash_map_t* hm) {
@@ -95,8 +134,8 @@ Http_status_t default_handler(  Http_response_t* res,
     return HTTP_STATUS_NOT_IMPLEMENTED;
 }
 
-Http_status_t prepare_response_for_valid_req_con(   Http_response_t* res,
-                                                    Http_request_context_t* req_con) {
+Http_status_t prepare_response_for_valid_req_con(Http_response_t* res,
+                                      Http_request_context_t* req_con) {
     //For now only GET is supported
     if (strcmp("GET", req_con->req.request_line.method) == 0) {
         return get_handler(res, req_con);
