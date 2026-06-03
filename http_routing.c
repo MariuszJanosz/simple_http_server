@@ -15,18 +15,18 @@ Http_status_t route_http_request(   Http_request_context_t* req_con,
     if (len + req_tar.len + 1 > PATH_MAX) {
         return HTTP_STATUS_URI_TOO_LONG;
     }
-    else if (    strncmp(req_tar.cstr, "/", strlen("/")) == 0 ||
-            strncmp(req_tar.cstr, "/index.html", strlen("/index.html")) == 0) {
+    else if (    strncmp(req_tar.cstr, "/", req_tar.len) == 0 ||
+            strncmp(req_tar.cstr, "/index.html", req_tar.len) == 0) {
         target = "/index.html";
     }
-    else if (   strncmp(req_tar.cstr, "/chunked", strlen("/chunked")) == 0 ||
-                strncmp(req_tar.cstr, "/chunked.html", strlen("/chunked.html")) == 0) {
+    else if (   strncmp(req_tar.cstr, "/chunked", req_tar.len) == 0 ||
+                strncmp(req_tar.cstr, "/chunked.html", req_tar.len) == 0) {
         target = "/chunked.html";
     }
-    else if (strncmp(req_tar.cstr, "/nggyu", strlen("/nggyu")) == 0) {
+    else if (strncmp(req_tar.cstr, "/nggyu", req_tar.len) == 0) {
         target = "/nggyu.html";
     }
-    else if (strncmp(req_tar.cstr, "/nggyu.mp4", strlen("/nggyu.mp4")) == 0) {
+    else if (strncmp(req_tar.cstr, "/nggyu.mp4", req_tar.len) == 0) {
         target = "/nggyu.mp4";
     }
     else {
