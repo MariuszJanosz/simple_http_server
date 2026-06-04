@@ -282,9 +282,96 @@ void send_buf(const int fd, const char* buf, const size_t size) {
     }
 }
 
+void read_buf(const int fd, char* buf, const size_t size) {
+    size_t n = 0;
+    while (n < size) {
+        ssize_t r = read(fd, buf + n, size - n);
+        if (r < 0) {
+            LOG(ERROR, "read failed!");
+            exit(1);
+        }
+        n += r;
+    }
+}
+
+size_t get_chunk_size_str(char* out, size_t in) {
+    if (in == 0) {
+        out[0] = '0';
+        out[1] = '\r';
+        out[2] = '\n';
+        return 3;
+    }
+    size_t len = 0;
+    while (in) {
+        const char conv_tb[] = {'0','1','2','3','4','5','6','7','8','9',
+                                'A','B','C','D','E','F'};
+        int digit = in % 16;
+        in /= 16;
+        out[len] = conv_tb[digit];
+        ++len;
+    }
+    out[len] = '\r';
+    ++len;
+    out[len] = '\n';
+    ++len;
+    return len;
+}
+
+#define MAX_CHUNK_SIZE (16 * 1024) //16kB
+
+void send_body_section_FILE_DESCRIPTOR_chunked(
+        Http_body_section_FILE_DESCRIPTOR_t* fd_sec,
+        Tcp_connection_t tcp_con) {
+    size_t sent_bytes = 0;
+    while (sent_bytes < fd_sec->size) {
+        size_t bytes_to_send =  (fd_sec->size - sent_bytes > MAX_CHUNK_SIZE)?
+                                MAX_CHUNK_SIZE:
+                                fd_sec->size - sent_bytes;
+        char chunk[MAX_CHUNK_SIZE];
+        read_buf(fd_sec->fd, chunk, bytes_to_send);
+        char chunk_size[16];
+        size_t chunk_size_len = get_chunk_size_str(chunk_size, bytes_to_send);
+        send_buf(tcp_con.fd, chunk_size, chunk_size_len);
+        send_buf(tcp_con.fd, chunk, bytes_to_send);
+        send_buf(tcp_con.fd, "\r\n", 2);
+        sent_bytes += bytes_to_send;
+    }
+}
+
+void send_body_section_CHAR_BUFFER_chunked(
+        Http_body_section_CHAR_BUFFER_t* char_buff_sec,
+        Tcp_connection_t tcp_con) {
+    size_t sent_bytes = 0;
+    while (sent_bytes < char_buff_sec->size) {
+        size_t bytes_to_send =  (char_buff_sec->size - sent_bytes > MAX_CHUNK_SIZE)?
+                                MAX_CHUNK_SIZE:
+                                char_buff_sec->size - sent_bytes;
+        char chunk_size[16];
+        size_t chunk_size_len = get_chunk_size_str(chunk_size, bytes_to_send);
+        send_buf(tcp_con.fd, chunk_size, chunk_size_len);
+        send_buf(tcp_con.fd, char_buff_sec->buffer + sent_bytes, bytes_to_send);
+        send_buf(tcp_con.fd, "\r\n", 2);
+        sent_bytes += bytes_to_send;
+    }
+}
+
 void send_body_chunked( Http_response_body_t* body,
                         Tcp_connection_t tcp_con) {
-
+    for (size_t i = 0; i < body->count; ++i) {
+        switch (body->section_types[i]) {
+            case FILE_DESCRIPTOR:
+                send_body_section_FILE_DESCRIPTOR_chunked(
+                        &body->sections[i].fd_section,
+                        tcp_con);
+                break;
+            case CHAR_BUFFER:
+                send_body_section_CHAR_BUFFER_chunked(
+                        &body->sections[i].char_buff_section,
+                        tcp_con);
+                break;
+        }
+    }
+    send_buf(tcp_con.fd, "0\r\n", 3);
 }
 
 void send_body_cl(  Http_response_body_t* body,
