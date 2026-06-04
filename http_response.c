@@ -148,15 +148,14 @@ void load_resource_to_body( Http_response_body_t* body,
     }
 }
 
+Http_status_t prepare_response_for_error(Http_response_t* res, Http_request_context_t* req_con);
+
 Http_status_t get_handler(  Http_response_t* res,
                             Http_request_context_t* req_con) {
     Http_status_t status = route_http_request(req_con, res);
     if (status == HTTP_STATUS_URI_TOO_LONG) {
-        res->status_line =  "HTTP/1.1 "
-                            stringify(HTTP_STATUS_URI_TOO_LONG)
-                            " \r\n";
-        res->headers = "\r\n";
-        return status;
+        req_con->status = status;
+        return prepare_response_for_error(res, req_con);
     }
     else if (status == HTTP_STATUS_NOT_FOUND) {
         res->status_line =  "HTTP/1.1 "
@@ -184,9 +183,8 @@ Http_status_t get_handler(  Http_response_t* res,
 
 Http_status_t default_handler(  Http_response_t* res,
                                 Http_request_context_t* req_con) {
-    res->status_line = "HTTP/1.1 " stringify(HTTP_STATUS_NOT_IMPLEMENTED) " \r\n";
-    res->headers = "\r\n";
-    return HTTP_STATUS_NOT_IMPLEMENTED;
+    req_con->status = HTTP_STATUS_NOT_IMPLEMENTED;
+    return prepare_response_for_error(res, req_con);
 }
 
 Http_status_t prepare_response_for_valid_req_con(Http_response_t* res,
