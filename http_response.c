@@ -413,21 +413,25 @@ void print_body(Http_response_body_t* body) {
         for (size_t i = 0; i < body->count; ++i) {
             switch (body->section_types[i]) {
                 case FILE_DESCRIPTOR:
-                    //TODO sendfile doesn't work with stdout
-                    //replace it with something else
-//                    if (lseek(body->sections[i].fd_section.fd,
-//                                0, SEEK_SET) < 0) {
-//                        LOG(ERROR, "lseek failed!");
-//                        exit(1);
-//                    }
-//                    if (sendfile(STDOUT_FILENO,
-//                               body->sections[i].fd_section.fd,
-//                               NULL,
-//                               body->sections[i].fd_section.size) < 0) {
-//                        LOG(ERROR, "sendfile failed!");
-//                        exit(1);
-//                    }
-                    break;
+                {
+                    Http_body_section_FILE_DESCRIPTOR_t* fd_sec = &body->sections[i].fd_section;
+                    //move fd offset back to the beginning of the file
+                    if (lseek(fd_sec->fd, 0, SEEK_SET) < 0) {
+                        LOG(ERROR, "lseek failed!");
+                        exit(1);
+                    }
+                    //print in chunks
+                    size_t sent_bytes = 0;
+                    while (sent_bytes < fd_sec->size) {
+                        size_t bytes_to_send = (fd_sec->size - sent_bytes > MAX_CHUNK_SIZE)?
+                                                MAX_CHUNK_SIZE:
+                                                fd_sec->size - sent_bytes;
+                        char chunk[MAX_CHUNK_SIZE];
+                        read_buf(fd_sec->fd, chunk, bytes_to_send);
+                        send_buf(STDOUT_FILENO, chunk, bytes_to_send);
+                        sent_bytes += bytes_to_send;
+                    }
+                } break;
                 case CHAR_BUFFER:
                     printf("%.*s",
                         (int)body->sections[i].char_buff_section.size,
