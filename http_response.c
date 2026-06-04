@@ -312,6 +312,11 @@ size_t get_chunk_size_str(char* out, size_t in) {
     ++len;
     out[len] = '\n';
     ++len;
+    for (int i = 0; i < (len - 2) / 2; ++i) {
+        char tmp = out[i];
+        out[i] = out[len - 3 - i];
+        out[len - 3 - i] = tmp;
+    }
     return len;
 }
 
