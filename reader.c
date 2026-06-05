@@ -51,9 +51,11 @@ size_t get_data(Tcp_connection_t tcp_con, char* output, size_t count) {
     else if (stl_leftover_size > 0) {
         memcpy(output, stl_leftover, stl_leftover_size);
         stl_leftover_start_index = 0;
+        count = stl_leftover_size;
         stl_leftover_size = 0;
-        return stl_leftover_size;
+        return count;
     }
+    stl_leftover_start_index = 0;
     stl_leftover_size = try_get_data(tcp_con, stl_leftover, LEFTOVER_CAPACITY);
     if (stl_leftover_size == 0) {//EOF
         return 0;
@@ -119,6 +121,7 @@ char* get_line(Tcp_connection_t tcp_con) {
             return res;
         }
     }
+    stl_leftover_start_index = 0;
     stl_leftover_size = try_get_data(tcp_con, stl_leftover, LEFTOVER_CAPACITY);
     //EOF detected return NULL
     if (stl_leftover_size == 0) {
