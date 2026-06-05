@@ -148,36 +148,114 @@ void load_resource_to_body( Http_response_body_t* body,
     }
 }
 
-Http_status_t prepare_response_for_error(Http_response_t* res, Http_request_context_t* req_con);
+Http_status_t prepare_response_for_error(   Http_response_t* res,
+                                            Http_request_context_t* req_con);
 
 Http_status_t get_handler(  Http_response_t* res,
                             Http_request_context_t* req_con) {
-    Http_status_t status = route_http_request(req_con, res);
-    if (status == HTTP_STATUS_URI_TOO_LONG) {
+    char* resource_rel_path;
+    Http_status_t status = route_http_request(  req_con, res,
+                                                &resource_rel_path);
+    if (!resource_rel_path) {
         req_con->status = status;
         return prepare_response_for_error(res, req_con);
     }
-    else if (status == HTTP_STATUS_NOT_FOUND) {
-        res->status_line =  "HTTP/1.1 "
-                            stringify(HTTP_STATUS_NOT_FOUND)
-                            " \r\n";
-    }
-    else {
+    else if (strcmp(resource_rel_path, "/index.html") == 0) {
         res->status_line =  "HTTP/1.1 "
                             stringify(HTTP_STATUS_OK)
-                            " \r\n";
+                            " OK\r\n";
+        init_body(&res->body);
+        res->has_body = 1;
+        load_resource_to_body(&res->body, res->resource_path);
+        init_field_line_hash_map(&res->headers_hm, 4);
+        res->has_headers_hm = 1;
+        char size[128];
+        sprintf(size, "%zu", res->body.size);
+        add_field_line_to_hash_map( &res->headers_hm,
+                                    "Content-Length",
+                                    size);
+        add_field_line_to_hash_map( &res->headers_hm,
+                                    "Content-Type",
+                                    "text/html");
+        res->headers = field_line_hash_map_to_headers_string(
+                                                        &res->headers_hm);
     }
-    init_body(&res->body);
-    res->has_body = 1;
-    load_resource_to_body(&res->body, res->resource_path);
-    init_field_line_hash_map(&res->headers_hm, 4);
-    res->has_headers_hm = 1;
-    char size[128];
-    sprintf(size, "%zu", res->body.size);
-    add_field_line_to_hash_map( &res->headers_hm,
-                                "Content-Length",
-                                size);
-    res->headers = field_line_hash_map_to_headers_string(&res->headers_hm);
+    else if (strcmp(resource_rel_path, "/404.html") == 0) {
+        res->status_line =  "HTTP/1.1 "
+                            stringify(HTTP_STATUS_NOT_FOUND)
+                            " NOT_FOUND\r\n";
+        init_body(&res->body);
+        res->has_body = 1;
+        load_resource_to_body(&res->body, res->resource_path);
+        init_field_line_hash_map(&res->headers_hm, 4);
+        res->has_headers_hm = 1;
+        char size[128];
+        sprintf(size, "%zu", res->body.size);
+        add_field_line_to_hash_map( &res->headers_hm,
+                                    "Content-Length",
+                                    size);
+        add_field_line_to_hash_map( &res->headers_hm,
+                                    "Content-Type",
+                                    "text/html");
+        res->headers = field_line_hash_map_to_headers_string(
+                                                        &res->headers_hm);
+    }
+    else if (strcmp(resource_rel_path, "/chunked.html") == 0) {
+        res->status_line =  "HTTP/1.1 "
+                            stringify(HTTP_STATUS_OK)
+                            " OK\r\n";
+        init_body(&res->body);
+        res->has_body = 1;
+        load_resource_to_body(&res->body, res->resource_path);
+        init_field_line_hash_map(&res->headers_hm, 4);
+        res->has_headers_hm = 1;
+        add_field_line_to_hash_map( &res->headers_hm,
+                                    "Transfer-Encoding",
+                                    "chunked");
+        add_field_line_to_hash_map( &res->headers_hm,
+                                    "Content-Type",
+                                    "text/html");
+        res->headers = field_line_hash_map_to_headers_string(
+                                                        &res->headers_hm);
+    }
+    else if (strcmp(resource_rel_path, "/nggyu.html") == 0) {
+        res->status_line =  "HTTP/1.1 "
+                            stringify(HTTP_STATUS_OK)
+                            " OK\r\n";
+        init_body(&res->body);
+        res->has_body = 1;
+        load_resource_to_body(&res->body, res->resource_path);
+        init_field_line_hash_map(&res->headers_hm, 4);
+        res->has_headers_hm = 1;
+        char size[128];
+        sprintf(size, "%zu", res->body.size);
+        add_field_line_to_hash_map( &res->headers_hm,
+                                    "Content-Length",
+                                    size);
+        add_field_line_to_hash_map( &res->headers_hm,
+                                    "Content-Type",
+                                    "text/html");
+        res->headers = field_line_hash_map_to_headers_string(
+                                                        &res->headers_hm);
+    }
+    else if (strcmp(resource_rel_path, "/nggyu.mp4") == 0) {
+        res->status_line =  "HTTP/1.1 "
+                            stringify(HTTP_STATUS_OK)
+                            " OK\r\n";
+        init_body(&res->body);
+        res->has_body = 1;
+        load_resource_to_body(&res->body, res->resource_path);
+        init_field_line_hash_map(&res->headers_hm, 4);
+        res->has_headers_hm = 1;
+        add_field_line_to_hash_map( &res->headers_hm,
+                                    "Transfer-Encoding",
+                                    "chunked");
+        add_field_line_to_hash_map( &res->headers_hm,
+                                    "Content-Type",
+                                    "video/mp4");
+        res->headers = field_line_hash_map_to_headers_string(
+                                                        &res->headers_hm);
+    }
     return status;
 }
 
