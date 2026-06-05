@@ -33,12 +33,20 @@ size_t try_get_data(Tcp_connection_t tcp_con, char* output, size_t count) {
         stl_reading_finished = 1;
         return 0;
     }
-    ssize_t r = read(tcp_con.fd, output, count);
-    if (r < 0) {
-        LOG(ERROR, "read failed!");
-        exit(1);
+    else if (fds.revents & POLLIN) {
+        //there is data to read
+        ssize_t r = read(tcp_con.fd, output, count);
+        if (r < 0) {
+            LOG(ERROR, "read failed!");
+            exit(1);
+        }
+        return r;
     }
-    return r;
+    else {
+        //there is no data and some other condition happened
+        stl_reading_finished = 1;
+        return 0;
+    }
 }
 
 size_t get_data(Tcp_connection_t tcp_con, char* output, size_t count) {
@@ -68,7 +76,10 @@ char* get_line(Tcp_connection_t tcp_con) {
     ++recur_depth;
 #define MAX_RECUR_DEPTH 20
     //This prevents the attack of sending infinite line that would cause stack overflow
-    if (recur_depth > MAX_RECUR_DEPTH) return NULL;
+    if (recur_depth > MAX_RECUR_DEPTH) {
+        --recur_depth;
+        return NULL;
+    }
     if (stl_leftover_size > 0) {
         int i = 0;
         while (i < stl_leftover_size) {

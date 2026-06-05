@@ -178,8 +178,6 @@ Http_status_t get_handler(  Http_response_t* res,
         add_field_line_to_hash_map( &res->headers_hm,
                                     "Content-Type",
                                     "text/html");
-        res->headers = field_line_hash_map_to_headers_string(
-                                                        &res->headers_hm);
     }
     else if (strcmp(resource_rel_path, "/404.html") == 0) {
         res->status_line =  "HTTP/1.1 "
@@ -198,8 +196,6 @@ Http_status_t get_handler(  Http_response_t* res,
         add_field_line_to_hash_map( &res->headers_hm,
                                     "Content-Type",
                                     "text/html");
-        res->headers = field_line_hash_map_to_headers_string(
-                                                        &res->headers_hm);
     }
     else if (strcmp(resource_rel_path, "/chunked.html") == 0) {
         res->status_line =  "HTTP/1.1 "
@@ -217,8 +213,6 @@ Http_status_t get_handler(  Http_response_t* res,
         add_field_line_to_hash_map( &res->headers_hm,
                                     "Content-Type",
                                     "text/html");
-        res->headers = field_line_hash_map_to_headers_string(
-                                                        &res->headers_hm);
         res->trailers = "\r\n";
 
     }
@@ -239,8 +233,6 @@ Http_status_t get_handler(  Http_response_t* res,
         add_field_line_to_hash_map( &res->headers_hm,
                                     "Content-Type",
                                     "text/html");
-        res->headers = field_line_hash_map_to_headers_string(
-                                                        &res->headers_hm);
     }
     else if (strcmp(resource_rel_path, "/nggyu.mp4") == 0) {
         res->status_line =  "HTTP/1.1 "
@@ -258,10 +250,13 @@ Http_status_t get_handler(  Http_response_t* res,
         add_field_line_to_hash_map( &res->headers_hm,
                                     "Content-Type",
                                     "video/mp4");
-        res->headers = field_line_hash_map_to_headers_string(
-                                                        &res->headers_hm);
         res->trailers = "\r\n";
     }
+    if (res->should_close)
+        add_field_line_to_hash_map( &res->headers_hm,
+                                    "Connection",
+                                    "close");
+    res->headers = field_line_hash_map_to_headers_string(&res->headers_hm);
     return status;
 }
 

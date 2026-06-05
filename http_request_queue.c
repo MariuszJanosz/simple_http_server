@@ -189,6 +189,8 @@ void request_queue_manager(Request_queue_t* rq, Tcp_connection_t tcp_con) {
         //If request is broken stop further reading
         if (req_con->status == PARSING_BROKEN_CLOSE_CONNECTION) {
             abort_reading(tcp_con);
+            mtx_unlock(&rq->mtx);
+            break;
         }
 
         rq->rear += 1;
