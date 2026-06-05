@@ -19,6 +19,7 @@ void init_response(Http_response_t* res) {
     res->has_headers_hm = 0;
     res->has_trailers_hm = 0;
     res->send_chunked = 0;
+    res->should_close = 0;
 }
 
 void free_body(Http_response_body_t* body);
@@ -345,6 +346,9 @@ break;
 
 Http_status_t prepare_response( Http_response_t* res,
                                 Http_request_context_t* req_con) {
+    if (req_con->close_connection_after_response) {
+        res->should_close = 1;
+    }
     if (req_con->status == REQUEST_PROCESSING_FINE)
         return prepare_response_for_valid_req_con(res, req_con);
 
@@ -490,6 +494,11 @@ void send_response( Http_response_t* res,
             send_buf(tcp_con.fd, res->trailers, strlen(res->trailers));
         }
         else send_body_cl(&res->body, tcp_con);
+    }
+    if (res->should_close) {
+        //If there are further piped requests, they will fail.
+        //It is fine anyway, messages after close are invalid.
+        close(tcp_con.fd);
     }
 }
 

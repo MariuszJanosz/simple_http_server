@@ -48,6 +48,7 @@ typedef struct Http_response_t {
     int has_headers_hm;
     int has_trailers_hm;
     int send_chunked;
+    int should_close;
 } Http_response_t;
 
 void init_response(Http_response_t* res);

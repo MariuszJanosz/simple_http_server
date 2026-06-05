@@ -212,6 +212,30 @@ Http_status_t process_content_length_line(Http_request_context_t* req_con) {
     return REQUEST_PROCESSING_FINE;
 }
 
+Http_status_t process_connection_line(Http_request_context_t* req_con) {
+    Field_line_t* connection_fl = find_field_line_in_hash_map(
+                                        &req_con->req.headers,
+                                        "Connection");
+    if (!connection_fl) return REQUEST_PROCESSING_FINE;
+    //process all tokens
+    int last_token = 0;
+    while (!last_token) {
+        char* token = connection_fl->field_values[0];
+        size_t token_len = 0;
+        while ( token[token_len] != ',' &&
+                token[token_len] != '\0') ++token_len;
+        if (token[token_len] == '\0') last_token = 1;
+        //For now implemenmt only Connection:close
+        if (strncasecmp(token, "close", token_len) == 0) {
+            req_con->close_connection_after_response = 1;
+        }
+        //set starting point of next token for next loop iteration
+        token += token_len + 1;
+        token_len = 0;
+    }
+    return REQUEST_PROCESSING_FINE;
+}
+
 Http_status_t process_request(Http_request_context_t* req_con) {
     //If there was an error before this phase, return immediately.
     if (req_con->status != PARSING_FINE) return req_con->status;
@@ -231,7 +255,8 @@ Http_status_t process_request(Http_request_context_t* req_con) {
         process_request_line,
         process_scheme,
         process_transfer_encoding_line,
-        process_content_length_line
+        process_content_length_line,
+        process_connection_line
     };
 
     for (   size_t i = 0;

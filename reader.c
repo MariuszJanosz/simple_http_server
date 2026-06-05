@@ -35,7 +35,7 @@ size_t try_get_data(Tcp_connection_t tcp_con, char* output, size_t count) {
     }
     ssize_t r = read(tcp_con.fd, output, count);
     if (r < 0) {
-        LOG(ERROR, "read faile!");
+        LOG(ERROR, "read failed!");
         exit(1);
     }
     return r;

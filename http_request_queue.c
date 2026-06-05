@@ -86,6 +86,9 @@ int response_writer_thr(void* response_writer_context) {
 
         //Process request to fill req_con or return immediately if PARSING_BROKEN_...
         req_con->status == process_request(req_con);
+        if (req_con->close_connection_after_response) {
+            abort_reading(tcp_con);
+        }
 
         //Prepare response based on request context, or generic one in case of an error
         Http_response_t res;
@@ -102,8 +105,13 @@ int response_writer_thr(void* response_writer_context) {
         }
 
         //Send response
-        send_response(&res, tcp_con);
-        DEBUG(echo_request_response_pair(req_con, &res));
+        if (req_con->status != PARSING_BROKEN_CLOSE_CONNECTION) {
+            send_response(&res, tcp_con);
+            DEBUG(echo_request_response_pair(req_con, &res));
+        }
+        else {
+            LOG(INFO, "Parsing broken, closing connection!");
+        }
         mtx_unlock(&rq->mtx);
 
         //Request block cleanup
