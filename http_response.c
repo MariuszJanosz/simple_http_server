@@ -212,11 +212,14 @@ Http_status_t get_handler(  Http_response_t* res,
         add_field_line_to_hash_map( &res->headers_hm,
                                     "Transfer-Encoding",
                                     "chunked");
+        res->send_chunked = 1;
         add_field_line_to_hash_map( &res->headers_hm,
                                     "Content-Type",
                                     "text/html");
         res->headers = field_line_hash_map_to_headers_string(
                                                         &res->headers_hm);
+        res->trailers = "\r\n";
+
     }
     else if (strcmp(resource_rel_path, "/nggyu.html") == 0) {
         res->status_line =  "HTTP/1.1 "
@@ -250,11 +253,13 @@ Http_status_t get_handler(  Http_response_t* res,
         add_field_line_to_hash_map( &res->headers_hm,
                                     "Transfer-Encoding",
                                     "chunked");
+        res->send_chunked = 1;
         add_field_line_to_hash_map( &res->headers_hm,
                                     "Content-Type",
                                     "video/mp4");
         res->headers = field_line_hash_map_to_headers_string(
                                                         &res->headers_hm);
+        res->trailers = "\r\n";
     }
     return status;
 }
