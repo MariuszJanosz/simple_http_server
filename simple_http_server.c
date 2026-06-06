@@ -8,6 +8,7 @@
 #include "log.h"
 #include "tcp_connection.h"
 #include "http_request_queue.h"
+#include "http_resources.h"
 
 #define IP (((unsigned int)127*(1<<24))+(0*(1<<16))+(0*(1<<8))+1) //127.0.0.1 localhost
 #define PORT 54321
@@ -30,6 +31,7 @@ void set_up_www_root(int argc, char** argv) {
 
 int main(int argc, char** argv) {
     set_up_www_root(argc, argv);
+    init_resources_from_config();
     //Do not wait for children return values, prevents zombie processes
     signal(SIGCHLD, SIG_IGN);
 

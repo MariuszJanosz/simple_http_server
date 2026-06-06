@@ -22,7 +22,8 @@ target_sources(simple_http_server PRIVATE	simple_http_server.c
 						http_request.c			http_request.h
 						http_request_context.c		http_request_context.h
 						http_response.c			http_response.h
-						http_routing.c			http_routing.h)
+						http_routing.c			http_routing.h
+						http_resources.c		http_resources.h)
 
 target_include_directories(simple_http_server PRIVATE uri/URI/)
 
