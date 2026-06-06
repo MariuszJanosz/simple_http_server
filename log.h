@@ -11,9 +11,9 @@ typedef enum Log_types_t {
 #define stringify(x) _stringify_(x)
 #define _stringify_(x) #x
 #ifndef NDEBUG
-#define LOG(type, msg) fprintf(stderr, "[%s]: FILE: %s LINE: %s; %s\n", #type, __FILE__, stringify(__LINE__), msg)
+#define LOG(type, msg, ...) fprintf(stderr, "[%s]: FILE: %s LINE: %s; " msg "\n", #type, __FILE__, stringify(__LINE__) __VA_OPT__(,) __VA_ARGS__)
 #else
-#define LOG(type, msg) 
+#define LOG(type, msg, ...) 
 #endif //NDEBUG
 
 #ifndef NDEBUG
