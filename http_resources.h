@@ -19,10 +19,14 @@ typedef struct Resource_t {
     size_t capacity;
 } Resource_t;
 
-typedef struct Path_hash_map_t {
+typedef struct Bucket_t {
     char* path;
-    size_t* resource_indices;
-    int* is_present;
+    size_t resource_index;
+    int is_present;
+} Bucket_t;
+
+typedef struct Path_hash_map_t {
+    Bucket_t* buckets;
     size_t capacity;
     size_t size;
 } Path_hash_map_t;
@@ -30,7 +34,6 @@ typedef struct Path_hash_map_t {
 extern Path_hash_map_t g_path_to_resource_index_hm;
 extern Resource_t* g_resources_array;
 extern size_t g_resources_count;
-extern size_t g_paths_count;
 
 void init_resources_from_config();
 
