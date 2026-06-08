@@ -8,6 +8,8 @@
 
 #include <limits.h>
 
+#include <sys/types.h>
+
 typedef enum Http_body_section_type_t {
     FILE_DESCRIPTOR,
     CHAR_BUFFER
@@ -40,7 +42,7 @@ typedef struct Http_response_t {
     const char* status_line;
     Field_line_hash_map_t headers_hm;
     char* headers;
-    char resource_path[PATH_MAX];
+    ssize_t resource_index;
     Http_response_body_t body;
     Field_line_hash_map_t trailers_hm;
     char* trailers;

@@ -1,6 +1,7 @@
 #include "http_response.h"
 #include "http_routing.h"
 #include "log.h"
+#include "http_resources.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -13,7 +14,7 @@
 void init_response(Http_response_t* res) {
     res->status_line = NULL;
     res->headers = NULL;
-    res->resource_path[0] = '\0';
+    res->resource_index = -1;
     res->trailers = NULL;
     res->has_body = 0;
     res->has_headers_hm = 0;
@@ -149,115 +150,203 @@ void load_resource_to_body( Http_response_body_t* body,
     }
 }
 
+const char* get_status_line(Http_status_t status) {
+#define VERSION "HTTP/1.1"
+#define SP " "
+#define CRLF "\r\n"
+    switch (status) {
+        case HTTP_STATUS_CONTINUE:
+            return VERSION SP stringify(HTTP_STATUS_CONTINUE) SP CRLF;
+        case HTTP_STATUS_SWITCHING_PROTOCOLS:
+            return VERSION SP stringify(HTTP_STATUS_SWITCHING_PROTOCOLS) SP CRLF;
+        case HTTP_STATUS_PROCESSING:
+            return VERSION SP stringify(HTTP_STATUS_PROCESSING) SP CRLF;
+        case HTTP_STATUS_EARLY_HINTS:
+            return VERSION SP stringify(HTTP_STATUS_EARLY_HINTS) SP CRLF;
+        case HTTP_STATUS_OK:
+            return VERSION SP stringify(HTTP_STATUS_OK) SP CRLF;
+        case HTTP_STATUS_CREATED:
+            return VERSION SP stringify(HTTP_STATUS_CREATED) SP CRLF;
+        case HTTP_STATUS_ACCEPTED:
+            return VERSION SP stringify(HTTP_STATUS_ACCEPTED) SP CRLF;
+        case HTTP_STATUS_NON_AUTHORITATIVE_INFORMATION:
+            return VERSION SP stringify(HTTP_STATUS_NON_AUTHORITATIVE_INFORMATION) SP CRLF;
+        case HTTP_STATUS_NO_CONTENT:
+            return VERSION SP stringify(HTTP_STATUS_NO_CONTENT) SP CRLF;
+        case HTTP_STATUS_RESET_CONTENT:
+            return VERSION SP stringify(HTTP_STATUS_RESET_CONTENT) SP CRLF;
+        case HTTP_STATUS_PARTIAL_CONTENT:
+            return VERSION SP stringify(HTTP_STATUS_PARTIAL_CONTENT) SP CRLF;
+        case HTTP_STATUS_MULTI_STATUS:
+            return VERSION SP stringify(HTTP_STATUS_MULTI_STATUS) SP CRLF;
+        case HTTP_STATUS_ALREADY_REPORTED:
+            return VERSION SP stringify(HTTP_STATUS_ALREADY_REPORTED) SP CRLF;
+        case HTTP_STATUS_IM_USED:
+            return VERSION SP stringify(HTTP_STATUS_IM_USED) SP CRLF;
+        case HTTP_STATUS_MULTIPLE_CHOICES:
+            return VERSION SP stringify(HTTP_STATUS_MULTIPLE_CHOICES) SP CRLF;
+        case HTTP_STATUS_MOVED_PERMANENTLY:
+            return VERSION SP stringify(HTTP_STATUS_MOVED_PERMANENTLY) SP CRLF;
+        case HTTP_STATUS_FOUND:
+            return VERSION SP stringify(HTTP_STATUS_FOUND) SP CRLF;
+        case HTTP_STATUS_SEE_OTHER:
+            return VERSION SP stringify(HTTP_STATUS_SEE_OTHER) SP CRLF;
+        case HTTP_STATUS_NOT_MODIFIED:
+            return VERSION SP stringify(HTTP_STATUS_NOT_MODIFIED) SP CRLF;
+        case HTTP_STATUS_USE_PROXY:
+            return VERSION SP stringify(HTTP_STATUS_USE_PROXY) SP CRLF;
+        case HTTP_STATUS_UNUSED:
+            return VERSION SP stringify(HTTP_STATUS_UNUSED) SP CRLF;
+        case HTTP_STATUS_TEMPORARY_REDIRECT:
+            return VERSION SP stringify(HTTP_STATUS_TEMPORARY_REDIRECT) SP CRLF;
+        case HTTP_STATUS_PERMANENT_REDIRECT:
+            return VERSION SP stringify(HTTP_STATUS_PERMANENT_REDIRECT) SP CRLF;
+        case HTTP_STATUS_BAD_REQUEST:
+            return VERSION SP stringify(HTTP_STATUS_BAD_REQUEST) SP CRLF;
+        case HTTP_STATUS_UNAUTHORIZED:
+            return VERSION SP stringify(HTTP_STATUS_UNAUTHORIZED) SP CRLF;
+        case HTTP_STATUS_PAYMENT_REQUIRED:
+            return VERSION SP stringify(HTTP_STATUS_PAYMENT_REQUIRED) SP CRLF;
+        case HTTP_STATUS_FORBIDDEN:
+            return VERSION SP stringify(HTTP_STATUS_FORBIDDEN) SP CRLF;
+        case HTTP_STATUS_NOT_FOUND:
+            return VERSION SP stringify(HTTP_STATUS_NOT_FOUND) SP CRLF;
+        case HTTP_STATUS_METHOD_NOT_ALLOWED:
+            return VERSION SP stringify(HTTP_STATUS_METHOD_NOT_ALLOWED) SP CRLF;
+        case HTTP_STATUS_NOT_ACCEPTABLE:
+            return VERSION SP stringify(HTTP_STATUS_NOT_ACCEPTABLE) SP CRLF;
+        case HTTP_STATUS_PROXY_AUTHENTICATION_REQUIRED:
+            return VERSION SP stringify(HTTP_STATUS_PROXY_AUTHENTICATION_REQUIRED) SP CRLF;
+        case HTTP_STATUS_REQUEST_TIMEOUT:
+            return VERSION SP stringify(HTTP_STATUS_REQUEST_TIMEOUT) SP CRLF;
+        case HTTP_STATUS_CONFLICT:
+            return VERSION SP stringify(HTTP_STATUS_CONFLICT) SP CRLF;
+        case HTTP_STATUS_GONE:
+            return VERSION SP stringify(HTTP_STATUS_GONE) SP CRLF;
+        case HTTP_STATUS_LENGTH_REQUIRED:
+            return VERSION SP stringify(HTTP_STATUS_LENGTH_REQUIRED) SP CRLF;
+        case HTTP_STATUS_PRECONDITION_FAILED:
+            return VERSION SP stringify(HTTP_STATUS_PRECONDITION_FAILED) SP CRLF;
+        case HTTP_STATUS_PAYLOAD_TOO_LARGE:
+            return VERSION SP stringify(HTTP_STATUS_PAYLOAD_TOO_LARGE) SP CRLF;
+        case HTTP_STATUS_URI_TOO_LONG:
+            return VERSION SP stringify(HTTP_STATUS_URI_TOO_LONG) SP CRLF;
+        case HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE:
+            return VERSION SP stringify(HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE) SP CRLF;
+        case HTTP_STATUS_RANGE_NOT_SATISFIABLE:
+            return VERSION SP stringify(HTTP_STATUS_RANGE_NOT_SATISFIABLE) SP CRLF;
+        case HTTP_STATUS_EXPECTATION_FAILED:
+            return VERSION SP stringify(HTTP_STATUS_EXPECTATION_FAILED) SP CRLF;
+        case HTTP_STATUS_I_M_A_TEAPOT:
+            return VERSION SP stringify(HTTP_STATUS_I_M_A_TEAPOT) SP CRLF;
+        case HTTP_STATUS_MISDIRECTED_REQUEST:
+            return VERSION SP stringify(HTTP_STATUS_MISDIRECTED_REQUEST) SP CRLF;
+        case HTTP_STATUS_UNPROCESSABLE_ENTITY:
+            return VERSION SP stringify(HTTP_STATUS_UNPROCESSABLE_ENTITY) SP CRLF;
+        case HTTP_STATUS_LOCKED:
+            return VERSION SP stringify(HTTP_STATUS_LOCKED) SP CRLF;
+        case HTTP_STATUS_FAILED_DEPENDANCY:
+            return VERSION SP stringify(HTTP_STATUS_FAILED_DEPENDANCY) SP CRLF;
+        case HTTP_STATUS_TOO_EARLY:
+            return VERSION SP stringify(HTTP_STATUS_TOO_EARLY) SP CRLF;
+        case HTTP_STATUS_UPGRADE_REQUIRED:
+            return VERSION SP stringify(HTTP_STATUS_UPGRADE_REQUIRED) SP CRLF;
+        case HTTP_STATUS_PRECONDITION_REQUIRED:
+            return VERSION SP stringify(HTTP_STATUS_PRECONDITION_REQUIRED) SP CRLF;
+        case HTTP_STATUS_TOO_MANY_REQUESTS:
+            return VERSION SP stringify(HTTP_STATUS_TOO_MANY_REQUESTS) SP CRLF;
+        case HTTP_STATUS_REQUEST_HEADER_FIELDS_TOO_LARGE:
+            return VERSION SP stringify(HTTP_STATUS_REQUEST_HEADER_FIELDS_TOO_LARGE) SP CRLF;
+        case HTTP_STATUS_UNAVAILABLE_FOR_LEGAL_REASONS:
+            return VERSION SP stringify(HTTP_STATUS_UNAVAILABLE_FOR_LEGAL_REASONS) SP CRLF;
+        case HTTP_STATUS_INTERNAL_SERVER_ERROR:
+            return VERSION SP stringify(HTTP_STATUS_INTERNAL_SERVER_ERROR) SP CRLF;
+        case HTTP_STATUS_NOT_IMPLEMENTED:
+            return VERSION SP stringify(HTTP_STATUS_NOT_IMPLEMENTED) SP CRLF;
+        case HTTP_STATUS_BAD_GATEWAY:
+            return VERSION SP stringify(HTTP_STATUS_BAD_GATEWAY) SP CRLF;
+        case HTTP_STATUS_SERVICE_UNAVAILABLE:
+            return VERSION SP stringify(HTTP_STATUS_SERVICE_UNAVAILABLE) SP CRLF;
+        case HTTP_STATUS_GATEWAY_TIMEOUT:
+            return VERSION SP stringify(HTTP_STATUS_GATEWAY_TIMEOUT) SP CRLF;
+        case HTTP_STATUS_HTTP_VERSION_NOT_SUPPORTED:
+            return VERSION SP stringify(HTTP_STATUS_HTTP_VERSION_NOT_SUPPORTED) SP CRLF;
+        case HTTP_STATUS_VARIANT_ALSO_NEGOTIATES:
+            return VERSION SP stringify(HTTP_STATUS_VARIANT_ALSO_NEGOTIATES) SP CRLF;
+        case HTTP_STATUS_INSUFFICIENT_STORAGE:
+            return VERSION SP stringify(HTTP_STATUS_INSUFFICIENT_STORAGE) SP CRLF;
+        case HTTP_STATUS_LOOP_DETECTED:
+            return VERSION SP stringify(HTTP_STATUS_LOOP_DETECTED) SP CRLF;
+        case HTTP_STATUS_NOT_EXTENDED:
+            return VERSION SP stringify(HTTP_STATUS_NOT_EXTENDED) SP CRLF;
+        case HTTP_STATUS_NETWORK_AUTHENTICATION_REQUIRED:
+            return VERSION SP stringify(HTTP_STATUS_NETWORK_AUTHENTICATION_REQUIRED) SP CRLF;
+        default:
+            return VERSION SP "500" SP CRLF;
+    }
+#undef VERSION
+#undef SP
+#undef CRLF
+}
+
+int has_chunked_header(Http_response_t* res) {
+    Field_line_t* trencfl = find_field_line_in_hash_map(&res->headers_hm, "Transfer-Encoding");
+    if (!trencfl) return 0;
+    for (size_t i = 0; i < trencfl->count; ++i) {
+        char* str = trencfl->field_values[i];
+        char* p = strstr(str, "chunked");
+        if (p && i < trencfl->count - 1) return 0;
+        if (i == trencfl->count - 1) {
+            if (!p) return 0;
+            if (p + strlen("chunked") != str + strlen(str)) return 0;
+            return 1;
+        }
+    }
+    return 0;
+}
+
 Http_status_t prepare_response_for_error(   Http_response_t* res,
                                             Http_request_context_t* req_con);
 
 Http_status_t get_handler(  Http_response_t* res,
                             Http_request_context_t* req_con) {
-    char* resource_rel_path;
-    Http_status_t status = route_http_request(  req_con, res,
-                                                &resource_rel_path);
-    if (!resource_rel_path) {
-        req_con->status = status;
+    route_http_request(req_con, res);
+    if (res->resource_index == -1) {
+        req_con->status = HTTP_STATUS_NOT_FOUND;
         return prepare_response_for_error(res, req_con);
     }
-    else if (strcmp(resource_rel_path, "/index.html") == 0) {
-        res->status_line =  "HTTP/1.1 "
-                            stringify(HTTP_STATUS_OK)
-                            " OK\r\n";
-        init_body(&res->body);
-        res->has_body = 1;
-        load_resource_to_body(&res->body, res->resource_path);
-        init_field_line_hash_map(&res->headers_hm, 4);
-        res->has_headers_hm = 1;
-        char size[128];
-        sprintf(size, "%zu", res->body.size);
-        add_field_line_to_hash_map( &res->headers_hm,
-                                    "Content-Length",
-                                    size);
-        add_field_line_to_hash_map( &res->headers_hm,
-                                    "Content-Type",
-                                    "text/html");
-    }
-    else if (strcmp(resource_rel_path, "/404.html") == 0) {
-        res->status_line =  "HTTP/1.1 "
-                            stringify(HTTP_STATUS_NOT_FOUND)
-                            " NOT_FOUND\r\n";
-        init_body(&res->body);
-        res->has_body = 1;
-        load_resource_to_body(&res->body, res->resource_path);
-        init_field_line_hash_map(&res->headers_hm, 4);
-        res->has_headers_hm = 1;
-        char size[128];
-        sprintf(size, "%zu", res->body.size);
-        add_field_line_to_hash_map( &res->headers_hm,
-                                    "Content-Length",
-                                    size);
-        add_field_line_to_hash_map( &res->headers_hm,
-                                    "Content-Type",
-                                    "text/html");
-    }
-    else if (strcmp(resource_rel_path, "/chunked.html") == 0) {
-        res->status_line =  "HTTP/1.1 "
-                            stringify(HTTP_STATUS_OK)
-                            " OK\r\n";
-        init_body(&res->body);
-        res->has_body = 1;
-        load_resource_to_body(&res->body, res->resource_path);
-        init_field_line_hash_map(&res->headers_hm, 4);
-        res->has_headers_hm = 1;
-        add_field_line_to_hash_map( &res->headers_hm,
-                                    "Transfer-Encoding",
-                                    "chunked");
-        res->send_chunked = 1;
-        add_field_line_to_hash_map( &res->headers_hm,
-                                    "Content-Type",
-                                    "text/html");
-        res->trailers = "\r\n";
-
-    }
-    else if (strcmp(resource_rel_path, "/nggyu.html") == 0) {
-        res->status_line =  "HTTP/1.1 "
-                            stringify(HTTP_STATUS_OK)
-                            " OK\r\n";
-        init_body(&res->body);
-        res->has_body = 1;
-        load_resource_to_body(&res->body, res->resource_path);
-        init_field_line_hash_map(&res->headers_hm, 4);
-        res->has_headers_hm = 1;
-        char size[128];
-        sprintf(size, "%zu", res->body.size);
-        add_field_line_to_hash_map( &res->headers_hm,
-                                    "Content-Length",
-                                    size);
-        add_field_line_to_hash_map( &res->headers_hm,
-                                    "Content-Type",
-                                    "text/html");
-    }
-    else if (strcmp(resource_rel_path, "/nggyu.mp4") == 0) {
-        res->status_line =  "HTTP/1.1 "
-                            stringify(HTTP_STATUS_OK)
-                            " OK\r\n";
-        init_body(&res->body);
-        res->has_body = 1;
-        load_resource_to_body(&res->body, res->resource_path);
-        init_field_line_hash_map(&res->headers_hm, 4);
-        res->has_headers_hm = 1;
-        add_field_line_to_hash_map( &res->headers_hm,
-                                    "Transfer-Encoding",
-                                    "chunked");
-        res->send_chunked = 1;
-        add_field_line_to_hash_map( &res->headers_hm,
-                                    "Content-Type",
-                                    "video/mp4");
-        res->trailers = "\r\n";
+    Resource_t resource = g_resources_array[res->resource_index];
+    res->status_line = get_status_line(resource.status);
+    init_body(&res->body);
+    load_resource_to_body(&res->body, resource.target);
+    res->has_body = 1;
+    init_field_line_hash_map(&res->headers_hm, resource.count + 2);
+    res->has_headers_hm = 1;
+    for (size_t i = 0; i < resource.count; ++i) {
+        Field_line_config_t flconf = resource.field_line_configs[i];
+        if (flconf.field_value) {
+            add_field_line_to_hash_map(&res->headers_hm, flconf.field_name, flconf.field_value);
+        }
+        else {
+            if (strcmp(flconf.func, "file_size") == 0) {
+                char size[128];
+                sprintf(size, "%zu", res->body.size);
+                add_field_line_to_hash_map(&res->headers_hm, flconf.field_name, size);
+            }
+            else {
+                LOG(ERROR, "unknown func!");
+                exit(1);
+            }
+        }
     }
     if (res->should_close)
-        add_field_line_to_hash_map( &res->headers_hm,
-                                    "Connection",
-                                    "close");
+        add_field_line_to_hash_map(&res->headers_hm, "Connection", "close");
     res->headers = field_line_hash_map_to_headers_string(&res->headers_hm);
-    return status;
+    if (has_chunked_header(res)) {
+        res->send_chunked = 1;
+        res->trailers = "\r\n";
+    }
+    return resource.status;
 }
 
 Http_status_t default_handler(  Http_response_t* res,

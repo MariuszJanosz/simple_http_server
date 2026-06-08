@@ -209,11 +209,13 @@ void add_resource(char* str, size_t len) {
         }
         g_resources_array = tmp;
     }
-    char* tar = strndup(str, len);
+    char* tar = malloc(PATH_MAX);
     if (!tar) {
-        LOG(ERROR, "strndup failed!");
+        LOG(ERROR, "malloc failed!");
         exit(1);
     }
+    strcpy(tar, g_www_root);
+    strncat(tar, str, len);
     g_resources_array[g_resources_count].target = tar;
     g_resources_array[g_resources_count].status = -1;
     g_resources_array[g_resources_count].capacity = 8;
