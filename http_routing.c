@@ -7,13 +7,13 @@
 #include <stdlib.h>
 
 void route_http_request(Http_request_context_t* req_con, Http_response_t* res) {
-    char* path = strndup(req_con->uri.path.cstr, req_con->uri.path.len);
-    if (!path) {
-        LOG(ERROR, "strndup failed!");
+    char path[PATH_MAX];
+    if (req_con->uri.path.len + 1 > PATH_MAX) {
+        LOG(ERROR, "path too long!");
         exit(1);
     }
+    strncpy(path, req_con->uri.path.cstr, req_con->uri.path.len);
     ssize_t ind = resource_index_for_path(path);
-    free(path);
     res->resource_index = ind;
 }
 

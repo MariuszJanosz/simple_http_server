@@ -10,8 +10,6 @@ typedef struct Http_request_context_t {
     Http_status_t status;
     //Additional fields describing processed request would go here
     URI uri;
-    size_t body_size;
-    int body_chunked;
     int close_connection_after_response;
 } Http_request_context_t;
 

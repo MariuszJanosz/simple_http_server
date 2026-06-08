@@ -30,7 +30,7 @@ typedef struct Bucket_t {
 typedef struct Path_hash_map_t {
     Bucket_t* buckets;
     size_t capacity;
-    size_t size;
+    size_t count;
 } Path_hash_map_t;
 
 extern Path_hash_map_t g_path_to_resource_index_hm;

@@ -21,7 +21,7 @@ size_t current_line_num = 0;
 
 void init_path_hash_map(size_t capacity) {
     g_path_to_resource_index_hm.capacity = capacity;
-    g_path_to_resource_index_hm.size = 0;
+    g_path_to_resource_index_hm.count = 0;
     g_path_to_resource_index_hm.buckets =
         calloc(capacity, sizeof(*g_path_to_resource_index_hm.buckets));
     if (!g_path_to_resource_index_hm.buckets) {
@@ -96,7 +96,7 @@ void add_path_to_hash_map(const char* path, size_t ind) {
         LOG(ERROR, "path's resource redefinition at line: %zu.", current_line_num);
         exit(1);
     }
-    if ((g_path_to_resource_index_hm.size + 1) / (float)g_path_to_resource_index_hm.capacity > 0.5f)
+    if ((g_path_to_resource_index_hm.count + 1) / (float)g_path_to_resource_index_hm.capacity > 0.5f)
         grow_and_rehash();
     size_t hash = prehash(path) % g_path_to_resource_index_hm.capacity;
     while (g_path_to_resource_index_hm.buckets[hash].is_present) {
@@ -183,7 +183,7 @@ static char* get_line(FILE* stream, size_t* len) {
 int is_valid_resource(char* str, size_t len) {
     if (len == 0) return 0;
     if (strlen(g_www_root) + len + 1 > PATH_MAX) {
-        LOG(ERROR, "path too long!");
+        LOG(ERROR, "path too long at line: %zu.", current_line_num);
         exit(1);
     }
     char resource_path[PATH_MAX];
@@ -218,10 +218,11 @@ void add_resource(char* str, size_t len) {
     strncat(tar, str, len);
     g_resources_array[g_resources_count].target = tar;
     g_resources_array[g_resources_count].status = -1;
-    g_resources_array[g_resources_count].capacity = 8;
+    const size_t init_capacity = 8;
+    g_resources_array[g_resources_count].capacity = init_capacity;
     g_resources_array[g_resources_count].count = 0;
     g_resources_array[g_resources_count].field_line_configs =
-        malloc(8 * sizeof(Field_line_config_t));
+        malloc(init_capacity * sizeof(Field_line_config_t));
     if (!g_resources_array[g_resources_count].field_line_configs) {
         LOG(ERROR, "malloc failed!");
         exit(1);
@@ -286,13 +287,8 @@ void add_path(char* str, size_t len) {
         add_path_to_hash_map("*", g_resources_count - 1);
     }
     else {
-        char* ptr = strndup(str + prefix_len, len - prefix_len);
-        if (!ptr) {
-            LOG(ERROR, "strndup failed!");
-            exit(1);
-        }
-        add_path_to_hash_map(ptr, g_resources_count - 1);
-        free(ptr);
+        str[len] = '\0'; //remove trailing '\n' before adding to hm
+        add_path_to_hash_map(str + prefix_len, g_resources_count - 1);
     }
 }
 
@@ -350,13 +346,16 @@ int is_valid_field_line(char* str, size_t len) {
         if (strncasecmp(ptr, function_prefix,
                     function_prefix_len) == 0) {
             ptr += function_prefix_len;
-            if (is_token(ptr, len -
-                        (prefix_len + field_name_len + 1 +
-                         function_prefix_len))) return 1;
-            else return 0;
+            if (!(abnf_is_ALPHA(ptr[0]) || ptr[0] == '_')) return 0;
+            for (   size_t i = 1;
+                    i < len - (prefix_len + field_name_len + 1 + function_prefix_len);
+                    ++i) {
+                if (!(abnf_is_ALPHA(ptr[i]) || abnf_is_DIGIT(ptr[i]) || ptr[i] == '_'))
+                    return 0;
+            }
+            return 1;
         }
-        else if (strncasecmp(ptr, value_prefix,
-                    value_prefix_len) == 0) {
+        else if (strncasecmp(ptr, value_prefix, value_prefix_len) == 0) {
             ptr += value_prefix_len;
             if (is_field_value(ptr,
                         len - ( prefix_len +
@@ -463,12 +462,10 @@ void init_resources_from_config() {
                         exit(1);
                     }
                     if (strcmp(line, "\n") == 0) {
-                        free(line);
                         state = END;
                     }
                     else if (is_valid_resource(line, line_len - 1)) {
                         add_resource(line, line_len - 1);
-                        free(line);
                         state = RESOURCE;
                     }
                     else {
@@ -495,7 +492,6 @@ void init_resources_from_config() {
                     }
                     if (is_valid_status(line, line_len - 1)) {
                         add_status(line, line_len - 1);
-                        free(line);
                         state = STATUS;
                     }
                     else {
@@ -522,7 +518,6 @@ void init_resources_from_config() {
                     }
                     if (is_valid_status(line, line_len - 1)) {
                         add_status(line, line_len - 1);
-                        free(line);
                         state = STATUS_AD;
                     }
                     else {
@@ -551,7 +546,6 @@ void init_resources_from_config() {
                     }
                     if (is_valid_path(line, line_len - 1, &is_default)) {
                         add_path(line, line_len - 1);
-                        free(line);
                         if (is_default) state = PATH_AD;
                         else state = PATH;
                     }
@@ -591,7 +585,6 @@ void init_resources_from_config() {
                         }
                         else {
                             add_path(line, line_len - 1);
-                            free(line);
                             state = PATH_AD;
                         }
                     }
@@ -626,22 +619,18 @@ void init_resources_from_config() {
                     }
                     if (is_valid_path(line, line_len - 1, &is_default)) {
                         add_path(line, line_len - 1);
-                        free(line);
                         if (is_default) state = PATH_AD;
                         else state = PATH;
                     }
                     else if (is_valid_field_line(line, line_len - 1)) {
                         add_field_line(line, line_len - 1);
-                        free(line);
                         state = FIELD_LINE;
                     }
                     else if (is_valid_resource(line, line_len - 1)) {
                         add_resource(line, line_len - 1);
-                        free(line);
                         state = RESOURCE;
                     }
                     else if (strcmp(line, "\n") == 0) {
-                        free(line);
                         state = END;
                     }
                     else {
@@ -688,22 +677,18 @@ void init_resources_from_config() {
                         }
                         else {
                             add_path(line, line_len - 1);
-                            free(line);
                             state = PATH_AD;
                         }
                     }
                     else if (is_valid_field_line(line, line_len - 1)) {
                         add_field_line(line, line_len - 1);
-                        free(line);
                         state = FIELD_LINE_AD;
                     }
                     else if (is_valid_resource(line, line_len - 1)) {
                         add_resource(line, line_len - 1);
-                        free(line);
                         state = RESOURCE_AD;
                     }
                     else if (strcmp(line, "\n") == 0) {
-                        free(line);
                         state = END;
                     }
                     else {
@@ -739,16 +724,13 @@ void init_resources_from_config() {
                     }
                     if (is_valid_field_line(line, line_len - 1)) {
                         add_field_line(line, line_len - 1);
-                        free(line);
                         state = FIELD_LINE;
                     }
                     else if (is_valid_resource(line, line_len - 1)) {
                         add_resource(line, line_len - 1);
-                        free(line);
                         state = RESOURCE;
                     }
                     else if (strcmp(line, "\n") == 0) {
-                        free(line);
                         state = END;
                     }
                     else {
@@ -783,16 +765,13 @@ void init_resources_from_config() {
                     }
                     if (is_valid_field_line(line, line_len - 1)) {
                         add_field_line(line, line_len - 1);
-                        free(line);
                         state = FIELD_LINE_AD;
                     }
                     else if (is_valid_resource(line, line_len - 1)) {
                         add_resource(line, line_len - 1);
-                        free(line);
                         state = RESOURCE_AD;
                     }
                     else if (strcmp(line, "\n") == 0) {
-                        free(line);
                         state = END;
                     }
                     else {
@@ -813,7 +792,6 @@ void init_resources_from_config() {
             case END:
                 {
                     if (is_EOF && line[0] == '\0') {
-                        free(line);
                         state = FIN;
                     }
                     else {
@@ -827,7 +805,7 @@ void init_resources_from_config() {
                 }
                 break;
         }
+        free(line);
     }
-
 }
 

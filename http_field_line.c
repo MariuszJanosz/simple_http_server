@@ -26,7 +26,7 @@ void init_field_line_hash_map(Field_line_hash_map_t* hm, const size_t capacity) 
         exit(1);
     }
     hm->capacity = capacity;
-    hm->occupied_count = 0;
+    hm->count = 0;
 }
 
 void free_field_line_hash_map(Field_line_hash_map_t* hm) {
@@ -53,7 +53,7 @@ void clean_field_line_hash_map(Field_line_hash_map_t* hm) {
             hm->buckets[i].bucket_status = EMPTY;
         }
     }
-    hm->occupied_count = 0;
+    hm->count = 0;
 }
 
 ssize_t find_field_line_bucket_index(const Field_line_hash_map_t* hm, const char* field_name) {
@@ -123,7 +123,7 @@ void add_field_line_to_hash_map(Field_line_hash_map_t* hm, const char* field_nam
         return;
     }
 #define LOAD_FACTOR_REHASH_THRESHOLD 0.5f
-    if ((float)(hm->occupied_count + 1) / hm->capacity > LOAD_FACTOR_REHASH_THRESHOLD)
+    if ((float)(hm->count + 1) / hm->capacity > LOAD_FACTOR_REHASH_THRESHOLD)
         grow_and_rehash(hm);
     size_t hash = prehash(field_name) % hm->capacity;
     while (hm->buckets[hash].bucket_status == OCCUPIED) {
@@ -151,6 +151,6 @@ void add_field_line_to_hash_map(Field_line_hash_map_t* hm, const char* field_nam
     }
     hm->buckets[hash].field_line.field_values[0] = s;
     hm->buckets[hash].field_line.count = 1;
-    hm->occupied_count += 1;
+    hm->count += 1;
 }
 

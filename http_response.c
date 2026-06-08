@@ -320,7 +320,7 @@ Http_status_t get_handler(  Http_response_t* res,
     init_body(&res->body);
     load_resource_to_body(&res->body, resource.target);
     res->has_body = 1;
-    init_field_line_hash_map(&res->headers_hm, resource.count + 2);
+    init_field_line_hash_map(&res->headers_hm, 2 * resource.count + 4);
     res->has_headers_hm = 1;
     for (size_t i = 0; i < resource.count; ++i) {
         Field_line_config_t flconf = resource.field_line_configs[i];

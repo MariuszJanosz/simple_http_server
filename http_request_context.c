@@ -11,8 +11,6 @@ void init_request_context(Http_request_context_t* req_con) {
     req_con->status = PARSING_FINE;
     memset(&req_con->uri, 0, sizeof(req_con->uri));
     req_con->close_connection_after_response = 0;
-    req_con->body_chunked = 0;
-    req_con->body_size = 0;
 }
 
 void free_request_context(Http_request_context_t* req_con) {
@@ -24,8 +22,6 @@ void clean_request_context(Http_request_context_t* req_con) {
     req_con->status = PARSING_FINE;
     memset(&req_con->uri, 0, sizeof(req_con->uri));
     req_con->close_connection_after_response = 0;
-    req_con->body_chunked = 0;
-    req_con->body_size = 0;
 }
 
 Http_status_t validate_target(Http_request_context_t* req_con) {
@@ -189,26 +185,6 @@ Http_status_t process_transfer_encoding_line(Http_request_context_t* req_con) {
         str[5] != 'e' ||
         str[6] != 'd')
         return HTTP_STATUS_NOT_IMPLEMENTED;
-    req_con->body_chunked = 1;
-    return REQUEST_PROCESSING_FINE;
-}
-
-Http_status_t process_content_length_line(Http_request_context_t* req_con) {
-    //if there were "Transfer-Encoding", nothing to check here
-    Field_line_t* trenc_fl = find_field_line_in_hash_map(&req_con->req.headers, "Transfer-Encoding");
-    if (trenc_fl && trenc_fl->field_values[0][0] != '\0') return REQUEST_PROCESSING_FINE;
-    //if there were no "Content-Length", nothing to check here
-    Field_line_t* cl_fl = find_field_line_in_hash_map(&req_con->req.headers, "Content-Length");
-    if (!cl_fl) return REQUEST_PROCESSING_FINE;
-    char* ptr = cl_fl->field_values[0];
-    size_t cl = 0;
-    do { //at this point we know that ptr is a string of digits
-         //we checked it during parsing request
-        cl *= 10;
-        cl += (*ptr - '0');
-        ++ptr;
-    } while (*ptr != '\0');
-    req_con->body_size = cl;
     return REQUEST_PROCESSING_FINE;
 }
 
@@ -255,7 +231,6 @@ Http_status_t process_request(Http_request_context_t* req_con) {
         process_request_line,
         process_scheme,
         process_transfer_encoding_line,
-        process_content_length_line,
         process_connection_line
     };
 

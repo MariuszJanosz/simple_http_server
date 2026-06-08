@@ -272,7 +272,7 @@ Http_status_t parse_body_chunked(Http_request_t* req, Tcp_connection_t tcp_con) 
             req->body = tmp;
         }
         memcpy(req->body + req->body_size, chunk, chunk_size);
-        req->body += chunk_size;
+        req->body_size += chunk_size;
         char* trailingCRLF = get_line(tcp_con);
         if (!trailingCRLF) {
             free(trailingCRLF), free(req->body);

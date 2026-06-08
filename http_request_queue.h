@@ -4,7 +4,6 @@
 #include "http_request_context.h"
 #include "reader.h"
 #include "tcp_connection.h"
-#include "status.h"
 
 #include <threads.h>
 

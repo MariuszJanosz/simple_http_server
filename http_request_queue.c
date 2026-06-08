@@ -1,6 +1,5 @@
 #include "log.h"
 #include "http_request_queue.h"
-#include "http_request_context.h"
 #include "http_response.h"
 
 #include <threads.h>
@@ -66,13 +65,13 @@ int response_writer_thr(void* response_writer_context) {
     int number_of_workers = ((Response_writer_context_t*)(response_writer_context))->number_of_workers;
     int curr_index = ((Response_writer_context_t*)(response_writer_context))->start_index;
     Tcp_connection_t tcp_con = ((Response_writer_context_t*)(response_writer_context))->tcp_con;
-    
+        
+    if (mtx_lock(&rq->mtx) == thrd_error) {
+        LOG(ERROR, "mtx_lock failed!");
+        exit(1);
+    }
     while (1) {
         //Wait until request is ready
-        if (mtx_lock(&rq->mtx) == thrd_error) {
-            LOG(ERROR, "mtx_lock failed!");
-            exit(1);
-        }
         Request_block_t* rb = &rq->queue[curr_index];
         while (!rb->request_ready) {
             if (s_request_queue_manager_finished && !rq->queue[curr_index].request_ready) {
@@ -135,7 +134,6 @@ int response_writer_thr(void* response_writer_context) {
         if (s_request_queue_manager_finished && !rq->queue[curr_index].request_ready) {
             goto cleanup;
         }
-        mtx_unlock(&rq->mtx);
     }
 
     //Cleanup
@@ -166,12 +164,12 @@ void init_writers(Request_queue_t* rq, int number_of_workers, Tcp_connection_t t
 }
 
 void request_queue_manager(Request_queue_t* rq, Tcp_connection_t tcp_con) {
+    if (mtx_lock(&rq->mtx) == thrd_error) {
+        LOG(ERROR, "mtx_lock failed!");
+        exit(1);
+    }
     while (!is_reading_finished(tcp_con)) {
         //prepare next request
-        if (mtx_lock(&rq->mtx) == thrd_error) {
-            LOG(ERROR, "mtx_lock failed!");
-            exit(1);
-        }
         while (!rq->is_nonfull) {
             cnd_wait(&rq->cnd_is_nonfull, &rq->mtx);
         }
@@ -189,7 +187,6 @@ void request_queue_manager(Request_queue_t* rq, Tcp_connection_t tcp_con) {
         //If request is broken stop further reading
         if (req_con->status == PARSING_BROKEN_CLOSE_CONNECTION) {
             abort_reading(tcp_con);
-            mtx_unlock(&rq->mtx);
             break;
         }
 
@@ -200,11 +197,6 @@ void request_queue_manager(Request_queue_t* rq, Tcp_connection_t tcp_con) {
         }
         rq->queue[rq->rear].request_ready = 1;
         cnd_signal(&rq->queue[rq->rear].cnd_request_ready);
-        mtx_unlock(&rq->mtx);
-    }
-    if (mtx_lock(&rq->mtx) == thrd_error) {
-        LOG(ERROR, "mtx_lock failed!");
-        exit(1);
     }
     s_request_queue_manager_finished = 1;
     for (int i = 0; i < REQUEST_QUEUE_CAPACITY; ++i) {

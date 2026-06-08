@@ -25,7 +25,7 @@ typedef struct Field_line_hash_map_bucket_t {
 typedef struct Field_line_hash_map_t {
     Field_line_hash_map_bucket_t* buckets;
     size_t capacity;
-    size_t occupied_count;
+    size_t count;
 } Field_line_hash_map_t;
 
 void init_field_line_hash_map(Field_line_hash_map_t* hm, const size_t capacity);
