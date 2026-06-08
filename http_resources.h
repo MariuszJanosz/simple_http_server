@@ -5,9 +5,11 @@
 
 #include <stddef.h>
 
+#include <sys/types.h>
+
 typedef struct Field_line_config_t {
     char* field_name;
-    void* func;
+    char* func;
     char* field_value;
 } Field_line_config_t;
 
@@ -36,6 +38,7 @@ extern Resource_t* g_resources_array;
 extern size_t g_resources_count;
 
 void init_resources_from_config();
+ssize_t resource_index_for_path(const char* path);
 
 #endif //HTTP_RESOURCES_H
 
