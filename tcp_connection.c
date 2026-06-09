@@ -24,8 +24,8 @@ int create_tcp_listener(uint32_t ip, uint16_t port) {
     struct sockaddr_in list_sock_addr;
     memset(&list_sock_addr, 0, sizeof(list_sock_addr));
     list_sock_addr.sin_family = AF_INET;
-    list_sock_addr.sin_port = htons(port);
-    list_sock_addr.sin_addr.s_addr = htonl(ip);
+    list_sock_addr.sin_port = port;
+    list_sock_addr.sin_addr.s_addr = ip;
     if (bind(list_sock_fd, (const struct sockaddr*)&list_sock_addr,
                 sizeof(list_sock_addr)) == -1) {
         LOG(ERROR, "bind failed!");

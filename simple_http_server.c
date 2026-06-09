@@ -2,41 +2,69 @@
 #include <stdio.h>
 #include <signal.h>
 #include <limits.h>
-
+#include <stdint.h>
 #include <unistd.h>
+#include <arpa/inet.h>
 
 #include "log.h"
 #include "tcp_connection.h"
 #include "http_request_queue.h"
 #include "http_resources.h"
 
-#define IP (((unsigned int)127*(1<<24))+(0*(1<<16))+(0*(1<<8))+1) //127.0.0.1 localhost
-#define PORT 54321
-
 int g_workers_finished = 0;
 cnd_t g_cnd_worker_finished;
 char g_www_root[PATH_MAX];
 
-void set_up_www_root(int argc, char** argv) {
-    if (argc != 2) {
-        printf("USAGE: simple_http_server <path_to_www_root>\n");
+struct in_addr addr;
+uint16_t port = 0;
+
+void process_command_line_arguments(int argc, char** argv) {
+    if (argc != 4) {
+        printf("USAGE: simple_http_server <path_to_www_root> <ip> <port>\n");
         exit(1);
     }
     
     if (!realpath(argv[1], g_www_root)) {
-        printf("USAGE: simple_http_server <path_to_www_root>\n");
+        printf("Invalid path to www root.\n");
+        printf("USAGE: simple_http_server <path_to_www_root> <ip> <port>\n");
         exit(1);
     }
+
+    if (!inet_aton(argv[2], &addr)) {
+        printf("Invalid ip.\n");
+        printf("USAGE: simple_http_server <path_to_www_root> <ip> <port>\n");
+        exit(1);
+    }
+
+    char* ptr = argv[3];
+    while (*ptr) {
+        if ('0' <= *ptr && *ptr <= '9') {
+            int digit = *ptr - '0';
+            if (port > (UINT16_MAX - digit) / 10) {
+                printf("Invalid port.\n");
+                printf("USAGE: simple_http_server <path_to_www_root> <ip> <port>\n");
+                exit(1);
+            }
+            port = 10 * port + digit;
+        }
+        else {
+            printf("Invalid port.\n");
+            printf("USAGE: simple_http_server <path_to_www_root> <ip> <port>\n");
+            exit(1);
+        }
+        ++ptr;
+    }
+    port = htons(port);
 }
 
 int main(int argc, char** argv) {
-    set_up_www_root(argc, argv);
+    process_command_line_arguments(argc, argv);
     init_resources_from_config();
     //Do not wait for children return values, prevents zombie processes
     signal(SIGCHLD, SIG_IGN);
 
     //Listen for tcp connection
-    int tcp_listener_fd = create_tcp_listener(IP, PORT);
+    int tcp_listener_fd = create_tcp_listener(addr.s_addr, port);
     Tcp_connection_t tcp_connection;
     while (1) {
         tcp_connection = accept_tcp_connection(tcp_listener_fd);
