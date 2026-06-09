@@ -5,11 +5,13 @@
 
 #include <stdlib.h>
 #include <string.h>
-
+#include <stdio.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/sendfile.h>
+
+extern char g_www_root[PATH_MAX];
 
 void init_response(Http_response_t* res) {
     res->status_line = NULL;
@@ -131,8 +133,60 @@ char* field_line_hash_map_to_headers_string(Field_line_hash_map_t* hm) {
 void load_resource_to_body( Http_response_body_t* body,
                             char* resource_path) {
     size_t len = strlen(resource_path);
-    if (len >= 9 && strcmp(".resource", &resource_path[len - 9]) == 0) {
-        //TODO: Here we parse .resource file and append specified elements to body
+    const char* ext = ".resource";
+    size_t ext_len = strlen(ext);
+    if (len >= ext_len && strcmp(ext, &resource_path[len - ext_len]) == 0) {
+        char file_path[PATH_MAX];
+        size_t root_len = strlen(g_www_root);
+        strcpy(file_path, g_www_root);
+        int empty_line_found = 0;
+        FILE* f = fopen(resource_path, "r");
+        if (!f) {
+            LOG(ERROR, "fopen failed!");
+            exit(1);
+        }
+        size_t path_len = root_len;
+        while (1) {
+            int c = fgetc(f);
+            if (c < 0) {
+                if (feof(f) && empty_line_found) {
+                    return; //OK
+                }
+                LOG(ERROR, "fgetc failed!");
+                exit(1);
+            }
+            switch (c) {
+                case '\n':
+                    {
+                        if (path_len == root_len) {
+                            if (empty_line_found) {
+                                LOG(ERROR, "Multiple empty lines in %s", resource_path);
+                                exit(1);
+                            }
+                            empty_line_found = 1;
+                        }
+                        else {
+                            if (path_len > PATH_MAX) {
+                                LOG(ERROR, "One of the paths in %s is too long!", resource_path);
+                                exit(1);
+                            }
+                            file_path[path_len] = '\0';
+                            load_resource_to_body(body, file_path);
+                            path_len = root_len;
+                        }
+                    }
+                    break;
+                default:
+                    {
+                        if (path_len > PATH_MAX) {
+                            LOG(ERROR, "One of the paths in %s is too long!", resource_path);
+                            exit(1);
+                        }
+                        file_path[path_len++] = c;
+                    }
+                    break;
+            }
+        }
     }
     else {
         //If it is not .resource file we simply append it to body as is
@@ -142,11 +196,28 @@ void load_resource_to_body( Http_response_body_t* body,
             exit(1);
         }
         size_t size = get_file_size(fd);
-        body->section_types[0] = FILE_DESCRIPTOR;
-        body->sections[0].fd_section.fd = fd;
-        body->sections[0].fd_section.size = size;
-        body->count = 1;
-        body->size = size;
+        if (body->count == body->capacity) {
+            body->capacity *= 2;
+            Http_any_body_section_type_t* tmp =
+                realloc(body->sections, body->capacity * sizeof(*tmp));
+            if (!tmp) {
+                LOG(ERROR, "realloc failed!");
+                exit(1);
+            }
+            body->sections = tmp;
+            Http_body_section_type_t* tmpp =
+                realloc(body->section_types, body->capacity * sizeof(*tmpp));
+            if (!tmpp) {
+                LOG(ERROR, "realloc failed!");
+                exit(1);
+            }
+            body->section_types = tmpp;
+        }
+        body->section_types[body->count] = FILE_DESCRIPTOR;
+        body->sections[body->count].fd_section.fd = fd;
+        body->sections[body->count].fd_section.size = size;
+        body->count += 1;
+        body->size += size;
     }
 }
 
