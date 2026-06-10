@@ -56,7 +56,6 @@ Http_status_t normalize_singleton_with_deduplication(Field_line_t* fl) {
     char* first_token = strtok(fl->field_values[0], ",");
     char* next_token = strtok(NULL, ",");
     if (!next_token) {
-        //If there was only one toke we return early to eliminate strdup
         return PARSING_FINE;
     }
     do {
@@ -66,13 +65,6 @@ Http_status_t normalize_singleton_with_deduplication(Field_line_t* fl) {
             return HTTP_STATUS_BAD_REQUEST;
         }
     } while (next_token = strtok(NULL, ","));
-    char* deduplicated = strdup(first_token);
-    if (!deduplicated) {
-        LOG(ERROR, "strdup failed!");
-        exit(1);
-    }
-    free(fl->field_values[0]);
-    fl->field_values[0] = deduplicated;
     return PARSING_FINE;
 }
 

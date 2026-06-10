@@ -396,13 +396,29 @@ Http_status_t get_handler(  Http_response_t* res,
     for (size_t i = 0; i < resource.count; ++i) {
         Field_line_config_t flconf = resource.field_line_configs[i];
         if (flconf.field_value) {
-            add_field_line_to_hash_map(&res->headers_hm, flconf.field_name, flconf.field_value);
+            char* s1 = strdup(flconf.field_name);
+            char* s2 = strdup(flconf.field_value);
+            if (s1 && s2) {
+                add_field_line_to_hash_map(&res->headers_hm, s1, s2);
+            }
+            else {
+                LOG(ERROR, "strdup failed!");
+                exit(1);
+            }
         }
         else {
             if (strcmp(flconf.func, "file_size") == 0) {
                 char size[128];
                 sprintf(size, "%zu", res->body.size);
-                add_field_line_to_hash_map(&res->headers_hm, flconf.field_name, size);
+                char* s1 = strdup(flconf.field_name);
+                char* s2 = strdup(size);
+                if (s1 && s2) {
+                    add_field_line_to_hash_map(&res->headers_hm, s1, s2);
+                }
+                else {
+                    LOG(ERROR, "strdup failed!");
+                    exit(1);
+                }
             }
             else {
                 LOG(ERROR, "unknown func!");
@@ -410,8 +426,11 @@ Http_status_t get_handler(  Http_response_t* res,
             }
         }
     }
-    if (res->should_close)
-        add_field_line_to_hash_map(&res->headers_hm, "Connection", "close");
+    if (res->should_close) {
+        char* s1 = strdup("Connection");
+        char* s2 = strdup("close");
+        add_field_line_to_hash_map(&res->headers_hm, s1, s2);
+    }
     res->headers = field_line_hash_map_to_headers_string(&res->headers_hm);
     if (has_chunked_header(res)) {
         res->send_chunked = 1;

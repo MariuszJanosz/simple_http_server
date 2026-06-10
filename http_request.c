@@ -86,24 +86,15 @@ Http_status_t parse_request_line(Http_request_t* req, Tcp_connection_t tcp_con) 
     char* target = strtok(NULL, " \r\n");
     char* version = strtok(NULL, " \r\n");
     char* leftover = strtok(NULL, " \r\n");
+    if (!version || leftover) {
+        free(line);
+        return HTTP_STATUS_BAD_REQUEST;
+    }
     req->request_line.method = method_string_to_literal(method);
-    char* s;
-    if (target) s = strdup(target);
-    else {
-        res = HTTP_STATUS_BAD_REQUEST;
-        s = strdup("");
-    }
-    if (!s) {
-        LOG(ERROR, "strdup failed!");
-        exit(1);
-    }
-    req->request_line.target = s;
+    memmove(line, target, version - target);
+    req->request_line.target = line;
     req->request_line.version = version_string_to_literal(version);
     //There should be only 3 parts
-    if (leftover) {
-        res = HTTP_STATUS_BAD_REQUEST;
-    }
-    free(line);
     return res;
 }
 
@@ -117,6 +108,12 @@ parse_next_field_line:
     //RFC9112 2.2 field lines starting with a white space shall be ignored
     if (isspace((unsigned char)line[0])) {
         free(line);
+        goto parse_next_field_line;
+    }
+    //If starts with ":" it has no field_name, so it is invalid
+    if (line[0] ==':') {
+        free(line);
+        if (res == PARSING_FINE) res = HTTP_STATUS_BAD_REQUEST;
         goto parse_next_field_line;
     }
     //If there is no ":" it is invalid line
@@ -140,8 +137,12 @@ parse_next_field_line:
         if (res == PARSING_FINE) res = HTTP_STATUS_BAD_REQUEST;
         goto parse_next_field_line;
     }
-    add_field_line_to_hash_map(hm, field_name, field_value);
-    free(line);
+    char* s = strdup(field_value);
+    if (!s) {
+        LOG(ERROR, "strdup failed!");
+        exit(1);
+    }
+    add_field_line_to_hash_map(hm, field_name, s);
     goto parse_next_field_line;
 }
 

@@ -101,7 +101,7 @@ void grow_and_rehash(Field_line_hash_map_t* hm) {
     hm->capacity = new_capacity;
 }
 
-void add_field_line_to_hash_map(Field_line_hash_map_t* hm, const char* field_name, const char* field_value) {
+void add_field_line_to_hash_map(Field_line_hash_map_t* hm, char* field_name, char* field_value) {
     ssize_t index = find_field_line_bucket_index(hm, field_name);
     if (index >= 0) {
         if (hm->buckets[index].field_line.count == hm->buckets[index].field_line.capacity) {
@@ -114,12 +114,7 @@ void add_field_line_to_hash_map(Field_line_hash_map_t* hm, const char* field_nam
             }
             hm->buckets[index].field_line.field_values = tmp;
         }
-        char* tmp = strdup(field_value);
-        if (!tmp) {
-            LOG(ERROR, "strdup failed!");
-            exit(1);
-        }
-        hm->buckets[index].field_line.field_values[hm->buckets[index].field_line.count++] = tmp;
+        hm->buckets[index].field_line.field_values[hm->buckets[index].field_line.count++] = field_value;
         return;
     }
 #define LOAD_FACTOR_REHASH_THRESHOLD 0.5f
@@ -131,12 +126,7 @@ void add_field_line_to_hash_map(Field_line_hash_map_t* hm, const char* field_nam
         hash %= hm->capacity;
     }
     hm->buckets[hash].bucket_status = OCCUPIED;
-    char* s = strdup(field_name);
-    if (!s) {
-        LOG(ERROR, "strdup failed!");
-        exit(1);
-    }
-    hm->buckets[hash].field_line.field_name = s;
+    hm->buckets[hash].field_line.field_name = field_name;
     hm->buckets[hash].field_line.field_values =
         malloc(sizeof(*hm->buckets[hash].field_line.field_values));
     if (!hm->buckets[hash].field_line.field_values) {
@@ -144,12 +134,7 @@ void add_field_line_to_hash_map(Field_line_hash_map_t* hm, const char* field_nam
         exit(1);
     }
     hm->buckets[hash].field_line.capacity = 1;
-    s = strdup(field_value);
-    if (!s) {
-        LOG(ERROR, "strdup failed!");
-        exit(1);
-    }
-    hm->buckets[hash].field_line.field_values[0] = s;
+    hm->buckets[hash].field_line.field_values[0] = field_value;
     hm->buckets[hash].field_line.count = 1;
     hm->count += 1;
 }
