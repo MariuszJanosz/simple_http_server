@@ -50,17 +50,18 @@ int main(int argc, char** argv) {
         req_con.status = parse_http_request(&req_con.req, tcp_connection);
         if (req_con.status == PARSING_BROKEN_CLOSE_CONNECTION) {
             abort_reading(tcp_connection);
+            LOG(INFO, "Parsing broken, closing connection!");
+            break;
         }
         req_con.status == process_request(&req_con);
         Http_response_t res;
         init_response(&res);
         req_con.status = prepare_response(&res, &req_con);
-        if (req_con.status != PARSING_BROKEN_CLOSE_CONNECTION) {
-            send_response(&res, tcp_connection);
-            DEBUG(echo_request_response_pair(&req_con, &res));
-        }
-        else {
-            LOG(INFO, "Parsing broken, closing connection!");
+        send_response(&res, tcp_connection);
+        DEBUG(echo_request_response_pair(&req_con, &res));
+        if (res.should_close) {
+            free_response(&res);
+            break;
         }
         free_response(&res);
         clean_request_context(&req_con);
