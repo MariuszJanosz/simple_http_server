@@ -15,7 +15,6 @@ target_sources(simple_http_server PRIVATE	simple_http_server.c
 						uri/URI/abnf.c			uri/URI/abnf.h
 						uri/URI/uri.c			uri/URI/uri.h
 						uri/URI/uri_parser.c		uri/URI/uri_parser.h
-						http_request_queue.c		http_request_queue.h
 						http_common_field_lines.c	http_common_field_lines.h
 						http_normalize_field_line.c	http_normalize_field_line.h
 						http_field_line.c		http_field_line.h
