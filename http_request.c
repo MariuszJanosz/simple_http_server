@@ -5,7 +5,6 @@
 #include "log.h"
 
 #include <string.h>
-#include <ctype.h>
 #include <stdlib.h>
 
 void init_http_request(Http_request_t* req) {
@@ -106,7 +105,7 @@ parse_next_field_line:
     if (!line) return PARSING_BROKEN_CLOSE_CONNECTION; //Unexpected EOF
     if (strcmp(line, "\r\n") == 0 || strcmp(line, "\n") == 0) return free(line), res; //End of headers
     //RFC9112 2.2 field lines starting with a white space shall be ignored
-    if (isspace((unsigned char)line[0])) {
+    if (line[0] == ' ' || line[0] == '\t') {
         free(line);
         goto parse_next_field_line;
     }
@@ -132,7 +131,8 @@ parse_next_field_line:
     char* field_value = strtok(NULL, "\r\n");
     if (!field_value) field_value = "";
     //RFC9112 5.1 whitespace between field-name and ":" not allowed
-    if (isspace((unsigned char)field_name[strlen(field_name) - 1])) {
+    if (    field_name[strlen(field_name) - 1] == ' ' ||
+            field_name[strlen(field_name) - 1] == '\t') {
         free(line);
         if (res == PARSING_FINE) res = HTTP_STATUS_BAD_REQUEST;
         goto parse_next_field_line;
@@ -221,10 +221,13 @@ Http_status_t parse_body_chunked(Http_request_t* req, Tcp_connection_t tcp_con) 
                 chunk_size *= 16;
                 chunk_size += (*size_str - '0');
             }
-            else if ('a' <= tolower((unsigned char)*size_str) &&
-                            tolower((unsigned char)*size_str) <= 'f') {
+            else if ('a' <= *size_str && *size_str <= 'f') {
                 chunk_size *= 16;
-                chunk_size += (tolower((unsigned char)*size_str) - 'a') + 10;
+                chunk_size += (*size_str - 'a') + 10;
+            }
+            else if ('A' <= *size_str && *size_str <= 'F') {
+                chunk_size *= 16;
+                chunk_size += (*size_str - 'A') + 10;
             }
             //Invalid chunk_size
             else {
@@ -297,7 +300,7 @@ Http_status_t parse_body(Http_request_t* req, Tcp_connection_t tcp_con) {
     Field_line_t* transfer_encoding_fl = find_field_line_in_hash_map(&req->headers, "Transfer-Encoding");
     if (transfer_encoding_fl) {
         const char* chunked_str = "chunked";
-        size_t len = strlen(chunked_str);
+        size_t len = sizeof("chunked") - 1;
         char* val = transfer_encoding_fl->field_values[0];
         int pos = 0;
         while (val[pos]) {

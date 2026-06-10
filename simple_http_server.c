@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <string.h>
 
 #include "log.h"
 #include "tcp_connection.h"
@@ -14,6 +15,7 @@
 int g_workers_finished = 0;
 cnd_t g_cnd_worker_finished;
 char g_www_root[PATH_MAX];
+size_t g_root_len;
 
 struct in_addr addr;
 uint16_t port = 0;
@@ -29,6 +31,8 @@ void process_command_line_arguments(int argc, char** argv) {
         printf("USAGE: simple_http_server <path_to_www_root> <ip> <port>\n");
         exit(1);
     }
+
+    g_root_len = strlen(g_www_root);
 
     if (!inet_aton(argv[2], &addr)) {
         printf("Invalid ip.\n");

@@ -12,6 +12,7 @@
 #include <sys/sendfile.h>
 
 extern char g_www_root[PATH_MAX];
+extern size_t g_root_len;
 
 void init_response(Http_response_t* res) {
     res->status_line = NULL;
@@ -92,10 +93,10 @@ size_t get_headers_size(Field_line_hash_map_t* hm) {
     for (size_t i = 0; i < hm->capacity; ++i) {
         Field_line_hash_map_bucket_t* b = &hm->buckets[i];
         if (b->bucket_status != OCCUPIED) continue;
+        size_t l = strlen(b->field_line.field_name);
         for (size_t j = 0; j < b->field_line.count; ++j) {
             //field-name ":" field-value CRLF
-            res +=  strlen(b->field_line.field_name)        + 1 +
-                    strlen(b->field_line.field_values[j])   + 2;
+            res +=  l + 1 + strlen(b->field_line.field_values[j]) + 2;
         }
     }
     res += 2; //CRLF ending headers section
@@ -134,18 +135,21 @@ void load_resource_to_body( Http_response_body_t* body,
                             char* resource_path) {
     size_t len = strlen(resource_path);
     const char* ext = ".resource";
-    size_t ext_len = strlen(ext);
+    size_t ext_len = sizeof(".resource") - 1;
     if (len >= ext_len && strcmp(ext, &resource_path[len - ext_len]) == 0) {
-        char file_path[PATH_MAX];
-        size_t root_len = strlen(g_www_root);
-        strcpy(file_path, g_www_root);
+        static char file_path[PATH_MAX];
+        static int init = 0;
+        if (!init) {
+            init = 1;
+            strcpy(file_path, g_www_root);
+        }
         int empty_line_found = 0;
         FILE* f = fopen(resource_path, "r");
         if (!f) {
             LOG(ERROR, "fopen failed!");
             exit(1);
         }
-        size_t path_len = root_len;
+        size_t path_len = g_root_len;
         while (1) {
             int c = fgetc(f);
             if (c < 0) {
@@ -158,7 +162,7 @@ void load_resource_to_body( Http_response_body_t* body,
             switch (c) {
                 case '\n':
                     {
-                        if (path_len == root_len) {
+                        if (path_len == g_root_len) {
                             if (empty_line_found) {
                                 LOG(ERROR, "Multiple empty lines in %s", resource_path);
                                 exit(1);
@@ -172,7 +176,7 @@ void load_resource_to_body( Http_response_body_t* body,
                             }
                             file_path[path_len] = '\0';
                             load_resource_to_body(body, file_path);
-                            path_len = root_len;
+                            path_len = g_root_len;
                         }
                     }
                     break;
@@ -369,7 +373,7 @@ int has_chunked_header(Http_response_t* res) {
         if (p && i < trencfl->count - 1) return 0;
         if (i == trencfl->count - 1) {
             if (!p) return 0;
-            if (p + strlen("chunked") != str + strlen(str)) return 0;
+            if (p + (sizeof("chunked") - 1) != str + strlen(str)) return 0;
             return 1;
         }
     }

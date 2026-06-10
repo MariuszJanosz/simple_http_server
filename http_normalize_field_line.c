@@ -3,7 +3,6 @@
 #include "log.h"
 
 #include <string.h>
-#include <ctype.h>
 #include <stdlib.h>
 
 Field_line_type_t determine_type(const char* field_name) {
@@ -14,9 +13,11 @@ void combine_values_into_list(Field_line_t* fl) {
     //nothing to do, so return early to avoid malloc
     if (fl->count < 2) return;
     size_t new_line_size = 0;
+    size_t lengths[fl->count];
     for (int i = 0; i < fl->count; ++i) {
         //+1 for appended ',' or '\0' after each appended line
-        new_line_size += strlen(fl->field_values[i]) + 1;
+        lengths[i] = strlen(fl->field_values[i]);
+        new_line_size += lengths[i] + 1;
     }
     char* new_line = malloc(new_line_size);
     if (!new_line) {
@@ -26,7 +27,7 @@ void combine_values_into_list(Field_line_t* fl) {
     size_t first_empty = 0;
     for (int i = 0; i < fl->count; ++i) {
         strcpy(new_line + first_empty, fl->field_values[i]);
-        first_empty += strlen(fl->field_values[i]);
+        first_empty += lengths[i];
         free(fl->field_values[i]);
         new_line[first_empty++] = ',';
     }
@@ -79,18 +80,18 @@ Http_status_t normalize_unknown_type(Field_line_t* fl) {
 void remove_OWS_list(Field_line_t* fl) {
     for (size_t i = 0; i < fl->count; ++i) {
         char* new_start = fl->field_values[i];
-        size_t len = strlen(new_start);
-        while (len > 0 && isspace((unsigned char)new_start[len - 1])) --len;
-        new_start[len] = '\0';
-        while (isspace((unsigned char)*new_start)) {
+        while (*new_start == ' ' || *new_start == '\t') {
             ++new_start;
         }
+        size_t len = strlen(new_start);
+        while (len > 0 && (new_start[len - 1] == ' ' || new_start[len - 1] == '\t')) --len;
+        new_start[len] = '\0';
         len = 0;
         size_t OWS_count = 0;
         while (new_start[len]) {
             char* first_empty = new_start + len;
             char* next_section = first_empty + OWS_count;
-            while (isspace((unsigned char)*next_section)) {
+            while (*next_section == ' ' || *next_section == '\t') {
                 ++next_section;
                 ++OWS_count;
             }
@@ -108,7 +109,8 @@ void remove_OWS_list(Field_line_t* fl) {
                 if (next_section[section_len] == '\0') return;
                 ++section_len;
                 size_t section_OWS_count = 0;
-                while (isspace((unsigned char)next_section[section_len + section_OWS_count])) {
+                while ( next_section[section_len + section_OWS_count] == ' ' ||
+                        next_section[section_len + section_OWS_count] == '\t') {
                     ++section_OWS_count;
                 }
                 //If it was invalid return immediately, further parsing would return error anyway
@@ -141,7 +143,8 @@ void remove_OWS_list(Field_line_t* fl) {
                 }
                 size_t section_OWS_count = 0;
                 if (next_section[section_len] == '\0') {
-                    while (section_len > 0 && isspace((unsigned char)next_section[section_len - 1])) {
+                    while (section_len > 0 && ( next_section[section_len - 1] == ' ' ||
+                                                next_section[section_len - 1] == '\t')) {
                         --section_len;
                         ++section_OWS_count;
                     }
@@ -151,7 +154,8 @@ void remove_OWS_list(Field_line_t* fl) {
                     OWS_count += section_OWS_count;
                 }
                 else {
-                    while (section_len > 0 && isspace((unsigned char)next_section[section_len - 1])) {
+                    while (section_len > 0 && ( next_section[section_len - 1] == ' ' ||
+                                                next_section[section_len - 1] == '\t')) {
                         --section_len;
                         ++section_OWS_count;
                     }
@@ -169,14 +173,25 @@ void remove_OWS_list(Field_line_t* fl) {
 void remove_OWS_singleton(Field_line_t* fl) {
     for (size_t i = 0; i < fl->count; ++i) {
         char* ptr = fl->field_values[i];
-        size_t len = strlen(ptr);
-        while (len > 0 && isspace((unsigned char)ptr[len - 1])) --len;
-        ptr[len] = '\0';
-        while (isspace((unsigned char)*ptr)) {
+        char* first_empty = ptr;
+        while (*ptr == ' ' || *ptr == '\t') {
             ++ptr;
-            --len;
         }
-        memmove(fl->field_values[i], ptr, len + 1);
+        if (*ptr == '\0') {
+            *first_empty = '\0';
+            return;
+        }
+        else {
+            size_t trailing_spaces = 0;
+            while (*ptr != '\0') {
+                *first_empty = *ptr;
+                if (*ptr == ' ' || *ptr == '\t') ++trailing_spaces;
+                else trailing_spaces = 0;
+                ++first_empty;
+                ++ptr;
+            }
+            first_empty[-trailing_spaces] = '\0';
+        }
     }
 }
 
