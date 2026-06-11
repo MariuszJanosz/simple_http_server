@@ -365,7 +365,7 @@ const char* get_status_line(Http_status_t status) {
 }
 
 int has_chunked_header(Http_response_t* res) {
-    Field_line_t* trencfl = find_field_line_in_hash_map(&res->headers_hm, "Transfer-Encoding");
+    Field_line_t* trencfl = find_field_line_in_hash_map(&res->headers_hm, "transfer-encoding");
     if (!trencfl) return 0;
     for (size_t i = 0; i < trencfl->count; ++i) {
         char* str = trencfl->field_values[i];
@@ -431,7 +431,7 @@ Http_status_t get_handler(  Http_response_t* res,
         }
     }
     if (res->should_close) {
-        char* s1 = strdup("Connection");
+        char* s1 = strdup("connection");
         char* s2 = strdup("close");
         add_field_line_to_hash_map(&res->headers_hm, s1, s2);
     }
@@ -472,7 +472,7 @@ break;
     switch (req_con->status) {
         case PARSING_BROKEN_CLOSE_CONNECTION:
             res->status_line = VERSION SP stringify(HTTP_STATUS_BAD_REQUEST) SP CRLF;
-            res->headers = "Connection:close" CRLF CRLF;
+            res->headers = "connection:close" CRLF CRLF;
             break;
         case_GENERIC_RESPONSE(HTTP_STATUS_BAD_REQUEST)
         case_GENERIC_RESPONSE(HTTP_STATUS_UNAUTHORIZED)

@@ -61,7 +61,7 @@ Http_status_t normalize_singleton_with_deduplication(Field_line_t* fl) {
     }
     do {
         if (strcmp(first_token, next_token) != 0) {
-            if (strcasecmp("Content-Length", fl->field_name) == 0)
+            if (strcmp("content-length", fl->field_name) == 0)
                 return PARSING_BROKEN_CLOSE_CONNECTION;
             return HTTP_STATUS_BAD_REQUEST;
         }

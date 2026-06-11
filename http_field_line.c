@@ -8,13 +8,11 @@
 size_t prehash(const unsigned char* key) {
     size_t res = 0;
     while (*key) {
-        //field line name is case-insensitive, make everything lowercase
-        unsigned char c = tolower((unsigned char)*key);
-        res += c;
+        res += *key;
         for (int i = 0; i < 2 * sizeof(res); ++i) {
             res = (res << 4 * i) + res + (res >> 4 * i);
         }
-        res += c;
+        res += *key;
         ++key;
     }
     return res;
@@ -62,7 +60,7 @@ ssize_t find_field_line_bucket_index(const Field_line_hash_map_t* hm, const char
     size_t res = start_index;
     do {
         if (hm->buckets[res].bucket_status == OCCUPIED &&
-                strcasecmp(hm->buckets[res].field_line.field_name, field_name) == 0) {
+                strcmp(hm->buckets[res].field_line.field_name, field_name) == 0) {
             return res;
         }
         ++res;

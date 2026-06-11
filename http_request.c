@@ -119,7 +119,14 @@ parse_next_field_line:
     char* ptr = line;
     int colon_found = 0;
     while (*ptr) {
-        if (*ptr == ':') colon_found = 1;
+        if (*ptr == ':') {
+            colon_found = 1;
+            break;
+        }
+        //normalize to lowercase so we don't have to call strcasecmp later
+        if ('A' <= *ptr && *ptr <= 'Z') {
+            *ptr = *ptr - 'A' + 'a';
+        }
         ++ptr;
     }
     if (!colon_found) {
@@ -297,7 +304,7 @@ Http_status_t parse_body_chunked(Http_request_t* req, Tcp_connection_t tcp_con) 
 
 Http_status_t parse_body(Http_request_t* req, Tcp_connection_t tcp_con) {
     //Check if req has chunk encoded body
-    Field_line_t* transfer_encoding_fl = find_field_line_in_hash_map(&req->headers, "Transfer-Encoding");
+    Field_line_t* transfer_encoding_fl = find_field_line_in_hash_map(&req->headers, "transfer-encoding");
     if (transfer_encoding_fl) {
         const char* chunked_str = "chunked";
         size_t len = sizeof("chunked") - 1;
@@ -332,7 +339,7 @@ Http_status_t parse_body(Http_request_t* req, Tcp_connection_t tcp_con) {
         if (pos) return PARSING_BROKEN_CLOSE_CONNECTION;
     }
     //Check if req has body with a given length
-    Field_line_t* content_length_fl = find_field_line_in_hash_map(&req->headers, "Content-Length");
+    Field_line_t* content_length_fl = find_field_line_in_hash_map(&req->headers, "content-length");
     if (content_length_fl) {
         char* ptr = content_length_fl->field_values[0];
         size_t content_length = 0;

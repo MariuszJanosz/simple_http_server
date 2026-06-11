@@ -113,7 +113,7 @@ Http_status_t process_request_line(Http_request_context_t* req_con) {
 }
 
 Http_status_t process_host_field_line(Http_request_context_t* req_con) {
-    Field_line_t* host_fl = find_field_line_in_hash_map(&req_con->req.headers, "Host");
+    Field_line_t* host_fl = find_field_line_in_hash_map(&req_con->req.headers, "host");
     if (!host_fl) return HTTP_STATUS_BAD_REQUEST;
     const char* cstr = host_fl->field_values[0];
     size_t i = 0;
@@ -167,10 +167,10 @@ Http_status_t process_scheme(Http_request_context_t* req_con) {
 }
 
 Http_status_t process_transfer_encoding_line(Http_request_context_t* req_con) {
-    Field_line_t* trenc_fl = find_field_line_in_hash_map(&req_con->req.headers, "Transfer-Encoding");
+    Field_line_t* trenc_fl = find_field_line_in_hash_map(&req_con->req.headers, "transfer-encoding");
     //if there is no "Transfer-Encoding" or it is empty, skip this stage
     if (!trenc_fl || trenc_fl->field_values[0][0] == '\0') return REQUEST_PROCESSING_FINE;
-    Field_line_t* cl_fl = find_field_line_in_hash_map(&req_con->req.headers, "Content-Length");
+    Field_line_t* cl_fl = find_field_line_in_hash_map(&req_con->req.headers, "content-length");
     //If there were both "Transfer-Encoding" and "Content-Length"
     //process this request, but close connection afterward
     if (cl_fl) req_con->close_connection_after_response = 1;
@@ -191,7 +191,7 @@ Http_status_t process_transfer_encoding_line(Http_request_context_t* req_con) {
 Http_status_t process_connection_line(Http_request_context_t* req_con) {
     Field_line_t* connection_fl = find_field_line_in_hash_map(
                                         &req_con->req.headers,
-                                        "Connection");
+                                        "connection");
     if (!connection_fl) return REQUEST_PROCESSING_FINE;
     //process all tokens
     int last_token = 0;

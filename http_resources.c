@@ -332,8 +332,14 @@ int is_valid_field_line(char* str, size_t len) {
         char* field_name = str + prefix_len;
         size_t field_name_len = 0;
         while ( field_name[field_name_len] != ' ' &&
-                field_name[field_name_len] != '\0')
+                field_name[field_name_len] != '\0') {
+            //normalize to lowercase
+            if ('A' <= field_name[field_name_len] &&
+                    field_name[field_name_len] <= 'Z') {
+                field_name[field_name_len] += 'a' - 'A';
+            }
             ++field_name_len;
+        }
         if (field_name[field_name_len] == '\0') return 0;
         if (!is_token(field_name, field_name_len)) return 0;
         if (len == prefix_len + field_name_len + 1) return 0;
